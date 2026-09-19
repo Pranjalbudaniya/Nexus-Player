@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
@@ -36,6 +37,7 @@ fun LibraryContextMenuSheet(
     video: MediaMetadata,
     onPlay: (String) -> Unit,
     onDismissRequest: () -> Unit,
+    onAddToPlaylist: ((MediaMetadata) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -97,6 +99,33 @@ fun LibraryContextMenuSheet(
                 HorizontalSpacer(spacing.medium)
                 Text(
                     text = "Play Video",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            // Add to Playlist Option
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        role = Role.Button,
+                        onClick = {
+                            onDismissRequest()
+                            onAddToPlaylist?.invoke(video)
+                        }
+                    )
+                    .padding(vertical = spacing.small),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalSpacer(spacing.medium)
+                Text(
+                    text = "Add to playlist",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )

@@ -26,8 +26,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -80,6 +84,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
+    var videoForAddToPlaylist by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     NexusScaffold(
         modifier = modifier,
@@ -258,7 +263,8 @@ fun HomeScreen(
                                             )
                                         }
                                     } else null,
-                                    onClick = { onVideoClick(item.id) }
+                                    onClick = { onVideoClick(item.id) },
+                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
                                 )
                             }
                         }
@@ -289,7 +295,8 @@ fun HomeScreen(
                                             )
                                         }
                                     } else null,
-                                    onClick = { onVideoClick(item.id) }
+                                    onClick = { onVideoClick(item.id) },
+                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
                                 )
                             }
                         }
@@ -318,7 +325,8 @@ fun HomeScreen(
                                             )
                                         }
                                     } else null,
-                                    onClick = { onVideoClick(item.id) }
+                                    onClick = { onVideoClick(item.id) },
+                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
                                 )
                             }
                         }
@@ -354,5 +362,13 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (videoForAddToPlaylist != null) {
+        AddToPlaylistBottomSheet(
+            videoId = videoForAddToPlaylist!!.first,
+            videoTitle = videoForAddToPlaylist!!.second,
+            onDismissRequest = { videoForAddToPlaylist = null }
+        )
     }
 }

@@ -39,6 +39,7 @@ dependencies {
     implementation(project(":core:player"))
     implementation(project(":core:scanner"))
     implementation(project(":core:ui"))
+    implementation(project(":feature:playlists"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

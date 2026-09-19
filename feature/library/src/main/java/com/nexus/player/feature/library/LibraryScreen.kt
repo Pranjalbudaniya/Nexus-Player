@@ -40,7 +40,11 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -485,12 +489,24 @@ fun LibraryScreen(
         }
 
         // Context Menu Sheet on Long-Press
+        var videoForAddToPlaylist by remember { mutableStateOf<MediaMetadata?>(null) }
         val selectedVideo = uiState.selectedVideoForMenu
         if (selectedVideo != null) {
             LibraryContextMenuSheet(
                 video = selectedVideo,
                 onPlay = onVideoClick,
-                onDismissRequest = onDismissContextMenu
+                onDismissRequest = onDismissContextMenu,
+                onAddToPlaylist = { video ->
+                    videoForAddToPlaylist = video
+                }
+            )
+        }
+
+        if (videoForAddToPlaylist != null) {
+            AddToPlaylistBottomSheet(
+                videoId = videoForAddToPlaylist!!.id,
+                videoTitle = videoForAddToPlaylist!!.title,
+                onDismissRequest = { videoForAddToPlaylist = null }
             )
         }
     }

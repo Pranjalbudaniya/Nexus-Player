@@ -1,0 +1,160 @@
+package com.nexus.player.feature.playlists.detail
+
+import androidx.lifecycle.SavedStateHandle
+import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+import com.nexus.player.core.playback.queue.QueueSource
+import com.nexus.player.feature.playlists.FakePlaylistRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class PlaylistDetailViewModelTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private lateinit var fakeRepository: FakePlaylistRepository
+    private lateinit var fakeQueueManager: PlaybackQueueManagerImpl
+    private lateinit var viewModel: PlaylistDetailViewModel
+    private val testPlaylistId = "pl_detail_1"
+
+    @Before
+    fun setUp() = runTest(testDispatcher) {
+        Dispatchers.setMain(testDispatcher)
+        fakeRepository = FakePlaylistRepository()
+        fakeQueueManager = PlaybackQueueManagerImpl()
+
+        // Create initial playlist and add items
+        fakeRepository.createPlaylist("Favorites")
+        val playlist = fakeRepository.getPlaylists().first()
+        fakeRepository.addVideoToPlaylist(playlist.id, "vid_1")
+        fakeRepository.addVideoToPlaylist(playlist.id, "vid_2")
+        fakeRepository.addVideoToPlaylist(playlist.id, "vid_3")
+
+        viewModel = PlaylistDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("playlistId" to playlist.id)),
+            playlistRepository = fakeRepository,
+            playbackQueueManager = fakeQueueManager
+        )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun loadsPlaylistAndItemsCorrectly() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertNotNull(state.playlist)
+        assertEquals("Favorites", state.playlist?.name)
+        assertEquals(3, state.items.size)
+        assertEquals(listOf("vid_1", "vid_2", "vid_3"), state.playableVideoIds)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun playAll_primesQueueManagerWithPlaylistSource() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        var startedVideoId: String? = null
+        viewModel.playAll { videoId ->
+            startedVideoId = videoId
+        }
+
+        assertEquals("vid_1", startedVideoId)
+        val queue = fakeQueueManager.queueState.value
+        assertEquals("vid_1", queue.currentVideoId)
+        assertEquals(3, queue.size)
+        assertTrue(queue.source is QueueSource.Playlist)
+        assertEquals("Favorites", (queue.source as QueueSource.Playlist).playlistName)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun shufflePlay_enablesShuffleAndStartsPlayback() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        var startedVideoId: String? = null
+        viewModel.shufflePlay { videoId ->
+            startedVideoId = videoId
+        }
+
+        assertNotNull(startedVideoId)
+        val queue = fakeQueueManager.queueState.value
+        assertTrue(queue.isShuffleEnabled)
+        assertTrue(queue.source is QueueSource.Playlist)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun playVideo_startsAtSpecificQueueItem() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        var startedVideoId: String? = null
+        viewModel.playVideo("vid_2") { videoId ->
+            startedVideoId = videoId
+        }
+
+        assertEquals("vid_2", startedVideoId)
+        val queue = fakeQueueManager.queueState.value
+        assertEquals("vid_2", queue.currentVideoId)
+        assertEquals(1, queue.currentIndex)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun removeVideoAndUndo_modifiesAndRestoresItems() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.removeVideo("vid_2")
+        advanceUntilIdle()
+
+        assertEquals(listOf("vid_1", "vid_3"), viewModel.uiState.value.playableVideoIds)
+
+        viewModel.undoRemoveVideo()
+        advanceUntilIdle()
+
+        assertEquals(3, viewModel.uiState.value.items.size)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun moveItem_updatesPersistentOrder() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        // Move item at 0 (vid_1) to index 2
+        viewModel.moveItem(fromIndex = 0, toIndex = 2)
+        advanceUntilIdle()
+
+        assertEquals(listOf("vid_2", "vid_3", "vid_1"), viewModel.uiState.value.playableVideoIds)
+
+        collectJob.cancel()
+    }
+}

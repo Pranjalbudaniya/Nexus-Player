@@ -13,6 +13,7 @@ import com.nexus.player.core.navigation.MoreRoute
 import com.nexus.player.core.navigation.NexusRoute
 import com.nexus.player.core.navigation.OnboardingRoute
 import com.nexus.player.core.navigation.PlayerRoute
+import com.nexus.player.core.navigation.PlaylistDetailsRoute
 import com.nexus.player.core.navigation.PlaylistsRoute
 import com.nexus.player.core.navigation.SearchRoute
 import com.nexus.player.core.navigation.SettingsRoute
@@ -21,6 +22,8 @@ import com.nexus.player.feature.library.folder.folderScreen
 import com.nexus.player.feature.library.libraryScreen
 import com.nexus.player.feature.onboarding.onboardingScreen
 import com.nexus.player.feature.player.playerScreen
+import com.nexus.player.feature.playlists.navigation.playlistDetailScreen
+import com.nexus.player.feature.playlists.navigation.playlistsScreen
 
 /**
  * Top-level Navigation Host for Nexus Player.
@@ -90,13 +93,24 @@ fun NexusNavHost(
         )
 
         // Tab 3: Playlists
-        composable<PlaylistsRoute> {
-            NexusPlaceholderScreen(
-                title = "Playlists",
-                subtitle = "Custom video collections, queues, and favorites",
-                badgeText = "Playlists Tab"
-            )
-        }
+        playlistsScreen(
+            onNavigateToPlaylist = { playlistId ->
+                navController.navigate(PlaylistDetailsRoute(playlistId))
+            }
+        )
+
+        // Playlist Detail Screen
+        playlistDetailScreen(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToPlayer = { videoId ->
+                navController.navigate(PlayerRoute(videoId))
+            },
+            onNavigateToLibrary = {
+                navController.navigate(LibraryRoute)
+            }
+        )
 
         // Tab 4: More
         composable<MoreRoute> {

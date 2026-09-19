@@ -61,6 +61,7 @@ dependencies {
     implementation(project(":feature:library"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:player"))
+    implementation(project(":feature:playlists"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

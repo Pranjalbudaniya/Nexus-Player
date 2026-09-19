@@ -3,9 +3,12 @@ package com.nexus.player.core.database.di
 import android.content.Context
 import androidx.room.Room
 import com.nexus.player.core.database.NexusDatabase
+import com.nexus.player.core.database.dao.PlaylistDao
 import com.nexus.player.core.database.dao.VideoDao
 import com.nexus.player.core.database.repository.FolderRepository
 import com.nexus.player.core.database.repository.FolderRepositoryImpl
+import com.nexus.player.core.database.repository.PlaylistRepository
+import com.nexus.player.core.database.repository.PlaylistRepositoryImpl
 import com.nexus.player.core.database.repository.VideoRepository
 import com.nexus.player.core.database.repository.VideoRepositoryImpl
 import dagger.Binds
@@ -32,6 +35,12 @@ abstract class DatabaseModule {
         impl: FolderRepositoryImpl
     ): FolderRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindPlaylistRepository(
+        impl: PlaylistRepositoryImpl
+    ): PlaylistRepository
+
     companion object {
 
         @Provides
@@ -43,12 +52,19 @@ abstract class DatabaseModule {
                 context,
                 NexusDatabase::class.java,
                 NexusDatabase.DATABASE_NAME
-            ).build()
+            )
+                .addMigrations(NexusDatabase.MIGRATION_1_2)
+                .build()
         }
 
         @Provides
         fun provideVideoDao(database: NexusDatabase): VideoDao {
             return database.videoDao()
+        }
+
+        @Provides
+        fun providePlaylistDao(database: NexusDatabase): PlaylistDao {
+            return database.playlistDao()
         }
     }
 }
