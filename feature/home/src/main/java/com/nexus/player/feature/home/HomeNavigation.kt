@@ -9,12 +9,14 @@ import com.nexus.player.core.navigation.HomeRoute
  */
 fun NavGraphBuilder.homeScreen(
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String) -> Unit = {},
     onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> }
 ) {
     composable<HomeRoute> {
         HomeRoute(
             onNavigateToSettings = onNavigateToSettings,
+            onNavigateToSearch = onNavigateToSearch,
             onVideoClick = onVideoClick,
             onFolderClick = onFolderClick
         )

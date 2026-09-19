@@ -46,10 +46,12 @@ class VideoDaoTest {
         id: String = "video_1",
         mediaUri: String = "content://media/external/video/media/1",
         title: String = "Big Buck Bunny",
+        fileName: String = "$title.mp4",
         folderName: String = "Movies",
         folderPath: String = "/storage/emulated/0/Movies",
         sizeBytes: Long = 104857600L,
         durationMs: Long = 600000L,
+        resolutionLabel: String = "1080p",
         dateAdded: Long = 1000L,
         lastPlayedAt: Long? = null,
         playbackPositionMs: Long = 0L,
@@ -59,8 +61,8 @@ class VideoDaoTest {
     ) = VideoEntity(
         id = id,
         mediaUri = mediaUri,
-        filePath = "/storage/emulated/0/Movies/$title.mp4",
-        fileName = "$title.mp4",
+        filePath = "/storage/emulated/0/Movies/$fileName",
+        fileName = fileName,
         title = title,
         folderName = folderName,
         folderPath = folderPath,
@@ -68,7 +70,7 @@ class VideoDaoTest {
         durationMs = durationMs,
         width = 1920,
         height = 1080,
-        resolutionLabel = "1080p",
+        resolutionLabel = resolutionLabel,
         videoCodec = "H.264",
         videoBitrate = 4000000L,
         frameRate = 30.0f,
@@ -315,5 +317,35 @@ class VideoDaoTest {
         assertNull(videoDao.getVideoById("stale_3"))
         assertNotNull(videoDao.getVideoById("valid_1"))
         assertNotNull(videoDao.getVideoById("valid_2"))
+    }
+
+    @Test
+    fun searchVideos_byTitleAndFilename() = runTest {
+        val video1 = createSampleVideo(id = "1", title = "Interstellar", fileName = "interstellar.mkv", mediaUri = "u1")
+        val video2 = createSampleVideo(id = "2", title = "The Matrix", fileName = "matrix_reloaded.mp4", mediaUri = "u2")
+        val video3 = createSampleVideo(id = "3", title = "Inception", fileName = "inception_trailer.mp4", mediaUri = "u3")
+        videoDao.upsertVideos(listOf(video1, video2, video3))
+
+        val results = videoDao.searchVideos("matrix", "matrix", "matrix%").first()
+        assertEquals(1, results.size)
+        assertEquals("The Matrix", results[0].title)
+
+        val resultsIn = videoDao.searchVideos("in", "in", "in%").first()
+        assertEquals(2, resultsIn.size)
+    }
+
+    @Test
+    fun searchVideos_byFolderAndResolution() = runTest {
+        val video1 = createSampleVideo(id = "1", title = "Nature 1", folderName = "4K_Documentaries", resolutionLabel = "4K", mediaUri = "u1")
+        val video2 = createSampleVideo(id = "2", title = "Nature 2", folderName = "Home_Videos", resolutionLabel = "1080p", mediaUri = "u2")
+        videoDao.upsertVideos(listOf(video1, video2))
+
+        val res4k = videoDao.searchVideos("4K", "4K", "4K%").first()
+        assertEquals(1, res4k.size)
+        assertEquals("Nature 1", res4k[0].title)
+
+        val home = videoDao.searchVideos("Home_Videos", "Home\\_Videos", "Home\\_Videos%").first()
+        assertEquals(1, home.size)
+        assertEquals("Nature 2", home[0].title)
     }
 }

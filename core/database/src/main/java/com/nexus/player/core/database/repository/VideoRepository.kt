@@ -1,5 +1,6 @@
 package com.nexus.player.core.database.repository
 
+import com.nexus.player.core.database.model.SearchFilter
 import com.nexus.player.core.database.model.Video
 import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.database.model.VideoSortOrder
@@ -12,6 +13,17 @@ import kotlinx.coroutines.flow.Flow
  * data-access logic from consumers.
  */
 interface VideoRepository {
+
+    /**
+     * Search indexed videos by text query across title, fileName, folder, resolution,
+     * duration, date added, and codecs.
+     */
+    fun searchVideos(query: String): Flow<List<Video>> = searchVideos(SearchFilter(query = query))
+
+    /**
+     * Search indexed videos with advanced filter specifications (resolution, duration, folder, sort).
+     */
+    fun searchVideos(filter: SearchFilter): Flow<List<Video>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
     /**
      * Observe all videos with the requested [sortOrder].

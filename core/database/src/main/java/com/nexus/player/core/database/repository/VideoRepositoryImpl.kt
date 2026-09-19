@@ -3,6 +3,8 @@ package com.nexus.player.core.database.repository
 import com.nexus.player.core.common.network.Dispatcher
 import com.nexus.player.core.common.network.NexusDispatchers
 import com.nexus.player.core.database.dao.VideoDao
+import com.nexus.player.core.database.model.SearchFilter
+import com.nexus.player.core.database.model.SearchSortOrder
 import com.nexus.player.core.database.model.Video
 import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.database.model.VideoSortOrder
@@ -10,9 +12,13 @@ import com.nexus.player.core.database.model.asDomain
 import com.nexus.player.core.database.model.asEntity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +30,32 @@ class VideoRepositoryImpl @Inject constructor(
     private val videoDao: VideoDao,
     @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher
 ) : VideoRepository {
+
+    override fun searchVideos(query: String): Flow<List<Video>> {
+        return searchVideos(SearchFilter(query = query))
+    }
+
+    override fun searchVideos(filter: SearchFilter): Flow<List<Video>> {
+        val trimmedQuery = filter.query.trim()
+        val hasFilters = filter.resolution != null ||
+            filter.minDurationMs != null ||
+            filter.maxDurationMs != null ||
+            filter.folderPath != null
+
+        if (trimmedQuery.isEmpty() && !hasFilters) {
+            return flowOf(emptyList())
+        }
+
+        return videoDao.getAllVideosByDateAddedDesc()
+            .map { entities ->
+                val domainList = entities.map { it.asDomain() }
+                val filtered = domainList.filter { video ->
+                    matchesSearch(video, trimmedQuery, filter)
+                }
+                rankAndSort(filtered, trimmedQuery, filter.sortOrder)
+            }
+            .flowOn(ioDispatcher)
+    }
 
     override fun getAllVideos(sortOrder: VideoSortOrder): Flow<List<Video>> {
         val entityFlow = when (sortOrder) {
@@ -136,5 +168,127 @@ class VideoRepositoryImpl @Inject constructor(
 
     override suspend fun clearAll() = withContext(ioDispatcher) {
         videoDao.clearAll()
+    }
+
+    private fun matchesSearch(video: Video, query: String, filter: SearchFilter): Boolean {
+        // Filter constraints
+        if (filter.resolution != null && !video.resolutionLabel.equals(filter.resolution, ignoreCase = true)) {
+            return false
+        }
+        if (filter.minDurationMs != null && video.durationMs < filter.minDurationMs) {
+            return false
+        }
+        if (filter.maxDurationMs != null && video.durationMs > filter.maxDurationMs) {
+            return false
+        }
+        if (filter.folderPath != null && !video.folderPath.equals(filter.folderPath, ignoreCase = true)) {
+            return false
+        }
+
+        if (query.isEmpty()) return true
+
+        val tokens = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return true
+
+        val titleLower = video.title.lowercase()
+        val fileNameLower = video.fileName.lowercase()
+        val folderNameLower = video.folderName.lowercase()
+        val folderPathLower = video.folderPath.lowercase()
+        val resLower = video.resolutionLabel.lowercase()
+        val vCodecLower = video.videoCodec?.lowercase().orEmpty()
+        val aCodecLower = video.audioCodec?.lowercase().orEmpty()
+        val durationFormatted = formatDurationInternal(video.durationMs)
+        val dateYear = getYearFromEpoch(video.dateAdded)
+        val dateFormatted = formatDateInternal(video.dateAdded).lowercase()
+
+        return tokens.all { token ->
+            titleLower.contains(token) ||
+            fileNameLower.contains(token) ||
+            folderNameLower.contains(token) ||
+            folderPathLower.contains(token) ||
+            resLower.contains(token) ||
+            vCodecLower.contains(token) ||
+            aCodecLower.contains(token) ||
+            durationFormatted.contains(token) ||
+            dateYear == token ||
+            dateFormatted.contains(token) ||
+            matchesDurationToken(video.durationMs, token)
+        }
+    }
+
+    private fun rankAndSort(
+        videos: List<Video>,
+        query: String,
+        sortOrder: SearchSortOrder
+    ): List<Video> {
+        return when (sortOrder) {
+            SearchSortOrder.DATE_ADDED_DESC -> videos.sortedByDescending { it.dateAdded }
+            SearchSortOrder.TITLE_ASC -> videos.sortedBy { it.title.lowercase() }
+            SearchSortOrder.DURATION_DESC -> videos.sortedByDescending { it.durationMs }
+            SearchSortOrder.SIZE_DESC -> videos.sortedByDescending { it.sizeBytes }
+            SearchSortOrder.RELEVANCE -> {
+                if (query.isEmpty()) {
+                    videos.sortedByDescending { it.dateAdded }
+                } else {
+                    videos.sortedWith(
+                        compareBy<Video> { video ->
+                            when {
+                                video.title.equals(query, ignoreCase = true) -> 0
+                                video.title.startsWith(query, ignoreCase = true) -> 1
+                                video.title.contains(query, ignoreCase = true) -> 2
+                                video.fileName.startsWith(query, ignoreCase = true) -> 3
+                                video.fileName.contains(query, ignoreCase = true) -> 4
+                                else -> 5
+                            }
+                        }.thenByDescending { it.dateAdded }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun matchesDurationToken(durationMs: Long, token: String): Boolean {
+        if (durationMs <= 0L) return false
+        val durationMinutes = durationMs / 60000
+        val durationHours = durationMs / 3600000
+        return when {
+            token == "${durationMinutes}m" || token == "${durationMinutes}min" -> true
+            token == "${durationHours}h" || token == "${durationHours}hr" -> true
+            token == "short" && durationMinutes < 5 -> true
+            token == "medium" && durationMinutes in 5..20 -> true
+            token == "long" && durationMinutes > 20 -> true
+            else -> false
+        }
+    }
+
+    private fun formatDurationInternal(durationMs: Long): String {
+        if (durationMs <= 0) return "00:00"
+        val totalSeconds = durationMs / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    private fun formatDateInternal(epochMillis: Long): String {
+        if (epochMillis <= 0) return ""
+        return try {
+            SimpleDateFormat("MMMM d yyyy", Locale.US).format(Date(epochMillis))
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun getYearFromEpoch(epochMillis: Long): String {
+        if (epochMillis <= 0) return ""
+        return try {
+            SimpleDateFormat("yyyy", Locale.US).format(Date(epochMillis))
+        } catch (_: Exception) {
+            ""
+        }
     }
 }

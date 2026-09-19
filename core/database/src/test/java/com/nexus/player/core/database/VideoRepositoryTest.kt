@@ -62,12 +62,16 @@ class VideoRepositoryTest {
         lastPlayedAt: Long? = null,
         playbackPositionMs: Long = 0L,
         playbackPercentage: Float = 0.0f,
-        isFavorite: Boolean = false
+        isFavorite: Boolean = false,
+        fileName: String = "$title.mp4",
+        resolutionLabel: String = "1080p",
+        videoCodec: String? = "H.264",
+        audioCodec: String? = "AAC"
     ) = Video(
         id = id,
         mediaUri = mediaUri,
-        filePath = "/storage$folderPath/$title.mp4",
-        fileName = "$title.mp4",
+        filePath = "/storage$folderPath/$fileName",
+        fileName = fileName,
         title = title,
         folderName = folderName,
         folderPath = folderPath,
@@ -75,8 +79,9 @@ class VideoRepositoryTest {
         durationMs = durationMs,
         width = 1920,
         height = 1080,
-        resolutionLabel = "1080p",
-        videoCodec = "H.264",
+        resolutionLabel = resolutionLabel,
+        videoCodec = videoCodec,
+        audioCodec = audioCodec,
         dateAdded = dateAdded,
         lastModified = dateAdded,
         lastPlayedAt = lastPlayedAt,
@@ -180,5 +185,127 @@ class VideoRepositoryTest {
 
         repository.deleteVideoByUri("uri_2")
         assertEquals(0, repository.getVideosCount())
+    }
+
+    @Test
+    fun searchVideos_emptyOrWhitespaceQuery_returnsEmptyList() = runTest {
+        repository.upsertVideos(
+            listOf(sampleDomainVideo(id = "1", title = "Test Video", mediaUri = "u1"))
+        )
+        val emptyResult = repository.searchVideos("").first()
+        val whitespaceResult = repository.searchVideos("    ").first()
+        assertEquals(0, emptyResult.size)
+        assertEquals(0, whitespaceResult.size)
+    }
+
+    @Test
+    fun searchVideos_matchesTitleFolderResolutionAndCodecs() = runTest {
+        val v1 = sampleDomainVideo(
+            id = "1",
+            title = "Oppenheimer",
+            fileName = "oppenheimer.mkv",
+            folderName = "Cinema",
+            resolutionLabel = "4K",
+            videoCodec = "hevc",
+            audioCodec = "dts",
+            mediaUri = "u1"
+        )
+        val v2 = sampleDomainVideo(
+            id = "2",
+            title = "Barbie",
+            fileName = "barbie.mp4",
+            folderName = "Comedy",
+            resolutionLabel = "1080p",
+            videoCodec = "h264",
+            audioCodec = "aac",
+            mediaUri = "u2"
+        )
+        repository.upsertVideos(listOf(v1, v2))
+
+        // Title match
+        val byTitle = repository.searchVideos("oppen").first()
+        assertEquals(1, byTitle.size)
+        assertEquals("1", byTitle[0].id)
+
+        // Folder match
+        val byFolder = repository.searchVideos("comedy").first()
+        assertEquals(1, byFolder.size)
+        assertEquals("2", byFolder[0].id)
+
+        // Resolution match
+        val byRes = repository.searchVideos("4k").first()
+        assertEquals(1, byRes.size)
+        assertEquals("1", byRes[0].id)
+
+        // Codec match
+        val byCodec = repository.searchVideos("hevc").first()
+        assertEquals(1, byCodec.size)
+        assertEquals("1", byCodec[0].id)
+    }
+
+    @Test
+    fun searchVideos_multiTokenMatching() = runTest {
+        val v1 = sampleDomainVideo(
+            id = "1",
+            title = "Family Vacation",
+            folderName = "Trip2024",
+            resolutionLabel = "4K",
+            mediaUri = "u1"
+        )
+        val v2 = sampleDomainVideo(
+            id = "2",
+            title = "Family Reunion",
+            folderName = "Home",
+            resolutionLabel = "1080p",
+            mediaUri = "u2"
+        )
+        repository.upsertVideos(listOf(v1, v2))
+
+        // "family 4k" should match v1 only
+        val result = repository.searchVideos("family 4k").first()
+        assertEquals(1, result.size)
+        assertEquals("1", result[0].id)
+
+        // "family trip" should match v1 only
+        val tripResult = repository.searchVideos("family trip").first()
+        assertEquals(1, tripResult.size)
+        assertEquals("1", tripResult[0].id)
+    }
+
+    @Test
+    fun searchVideos_relevanceRanking() = runTest {
+        val v1 = sampleDomainVideo(id = "1", title = "Fast and Furious", mediaUri = "u1")
+        val v2 = sampleDomainVideo(id = "2", title = "Fast", mediaUri = "u2")
+        val v3 = sampleDomainVideo(id = "3", title = "Too Fast Too Furious", mediaUri = "u3")
+        repository.upsertVideos(listOf(v1, v2, v3))
+
+        val results = repository.searchVideos("fast").first()
+        assertEquals(3, results.size)
+        // Exact match "Fast" should be ranked 1st
+        assertEquals("2", results[0].id)
+        // Title starting with "Fast" ("Fast and Furious") should be ranked 2nd
+        assertEquals("1", results[1].id)
+        // Substring match ("Too Fast...") should be ranked 3rd
+        assertEquals("3", results[2].id)
+    }
+
+    @Test
+    fun searchVideos_reactiveUpdatesOnInsertAndDelete() = runTest {
+        repository.upsertVideos(
+            listOf(sampleDomainVideo(id = "1", title = "Avatar 1", mediaUri = "u1"))
+        )
+        assertEquals(1, repository.searchVideos("Avatar").first().size)
+
+        // Insert new matching video
+        repository.upsertVideos(
+            listOf(sampleDomainVideo(id = "2", title = "Avatar 2", mediaUri = "u2"))
+        )
+        assertEquals(2, repository.searchVideos("Avatar").first().size)
+
+        // Delete video
+        repository.deleteVideo("1")
+        val updated = repository.searchVideos("Avatar").first()
+        assertEquals(1, updated.size)
+        assertEquals("2", updated[0].id)
     }
 }

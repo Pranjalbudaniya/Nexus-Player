@@ -24,6 +24,7 @@ import com.nexus.player.feature.onboarding.onboardingScreen
 import com.nexus.player.feature.player.playerScreen
 import com.nexus.player.feature.playlists.navigation.playlistDetailScreen
 import com.nexus.player.feature.playlists.navigation.playlistsScreen
+import com.nexus.player.feature.search.navigation.searchScreen
 
 /**
  * Top-level Navigation Host for Nexus Player.
@@ -57,6 +58,9 @@ fun NexusNavHost(
         homeScreen(
             onNavigateToSettings = {
                 navController.navigate(SettingsRoute)
+            },
+            onNavigateToSearch = {
+                navController.navigate(SearchRoute)
             },
             onVideoClick = { videoId ->
                 navController.navigate(PlayerRoute(videoId))
@@ -141,15 +145,13 @@ fun NexusNavHost(
         )
 
         // Deep Destination: Search
-        composable<SearchRoute> {
-            NexusPlaceholderScreen(
-                title = "Search",
-                subtitle = "Global media search",
-                badgeText = "Search",
-                onBackClick = {
-                    navController.popBackStack()
-                }
-            )
-        }
+        searchScreen(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToPlayer = { videoId ->
+                navController.navigate(PlayerRoute(videoId))
+            }
+        )
     }
 }

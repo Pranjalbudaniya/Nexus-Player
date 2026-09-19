@@ -121,6 +121,35 @@ interface VideoDao {
     """)
     fun getFolders(): Flow<List<FolderSummary>>
 
+    // --- Global Search Queries ---
+
+    @Query("""
+        SELECT * FROM videos 
+        WHERE (:escapedQuery = '' OR 
+               title LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+            OR fileName LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+            OR folderName LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+            OR folderPath LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+            OR resolutionLabel LIKE '%' || :escapedQuery || '%' ESCAPE '\'
+            OR (videoCodec IS NOT NULL AND videoCodec LIKE '%' || :escapedQuery || '%' ESCAPE '\')
+            OR (audioCodec IS NOT NULL AND audioCodec LIKE '%' || :escapedQuery || '%' ESCAPE '\')
+        )
+        ORDER BY 
+            CASE 
+                WHEN title = :rawQuery THEN 1
+                WHEN title LIKE :prefixQuery ESCAPE '\' THEN 2
+                WHEN fileName LIKE :prefixQuery ESCAPE '\' THEN 3
+                WHEN title LIKE '%' || :escapedQuery || '%' ESCAPE '\' THEN 4
+                ELSE 5
+            END,
+            dateAdded DESC
+    """)
+    fun searchVideos(
+        rawQuery: String,
+        escapedQuery: String,
+        prefixQuery: String
+    ): Flow<List<VideoEntity>>
+
     // --- Single Item Lookups ---
 
     @Query("SELECT * FROM videos WHERE id = :id")

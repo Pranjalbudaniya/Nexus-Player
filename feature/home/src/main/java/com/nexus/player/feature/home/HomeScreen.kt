@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +54,7 @@ import com.nexus.player.feature.home.component.HomeThumbnail
 @Composable
 fun HomeRoute(
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String) -> Unit = {},
     onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -64,6 +66,7 @@ fun HomeRoute(
         uiState = uiState,
         thumbnailLoader = viewModel.thumbnailLoader,
         onNavigateToSettings = onNavigateToSettings,
+        onNavigateToSearch = onNavigateToSearch,
         onVideoClick = { videoId ->
             viewModel.playVideo(videoId)
             onVideoClick(videoId)
@@ -79,6 +82,7 @@ fun HomeScreen(
     uiState: HomeUiState,
     thumbnailLoader: ThumbnailLoader? = null,
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String) -> Unit = {},
     onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -92,6 +96,17 @@ fun HomeScreen(
             NexusTopAppBar(
                 title = "Nexus Player",
                 actions = {
+                    IconButton(
+                        onClick = onNavigateToSearch,
+                        modifier = Modifier.semantics { contentDescription = "Search" }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     IconButton(
                         onClick = onNavigateToSettings,
                         modifier = Modifier.semantics { contentDescription = "Settings" }
