@@ -17,6 +17,12 @@ import com.nexus.player.core.playback.model.PlaybackStatus
 import com.nexus.player.core.playback.model.PlayerState
 import com.nexus.player.core.playback.model.SubtitleAppearance
 import com.nexus.player.core.playback.model.VideoScaleMode
+import com.nexus.player.core.playback.queue.PlaybackQueueManager
+import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+import com.nexus.player.core.playback.queue.PlaybackQueueState
+import com.nexus.player.core.playback.queue.PreviousResult
+import com.nexus.player.core.playback.queue.QueueSource
+import com.nexus.player.core.playback.queue.RepeatMode
 import com.nexus.player.core.playback.repository.SubtitleRepository
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepository
 import com.nexus.player.feature.player.screenshot.ScreenshotManager
@@ -77,6 +83,7 @@ class PlayerViewModel internal constructor(
     private val subtitleRepository: SubtitleRepository,
     private val ioDispatcher: CoroutineDispatcher,
     @ApplicationContext private val appContext: Context? = null,
+    val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl(),
     internal var timeProvider: () -> Long
 ) : ViewModel() {
 
@@ -87,6 +94,7 @@ class PlayerViewModel internal constructor(
         player: NexusPlayer,
         playerPreferencesRepository: PlayerPreferencesRepository,
         subtitleRepository: SubtitleRepository,
+        playbackQueueManager: PlaybackQueueManager,
         @Dispatcher(NexusDispatchers.IO) ioDispatcher: CoroutineDispatcher,
         @ApplicationContext appContext: Context
     ) : this(
@@ -97,6 +105,7 @@ class PlayerViewModel internal constructor(
         subtitleRepository = subtitleRepository,
         ioDispatcher = ioDispatcher,
         appContext = appContext,
+        playbackQueueManager = playbackQueueManager,
         timeProvider = { System.currentTimeMillis() }
     )
 
@@ -124,8 +133,12 @@ class PlayerViewModel internal constructor(
     private var lastPersistWallTimeMs: Long = 0L
     private var lastPersistedPositionMs: Long = -1L
     private var hasMarkedCompletedForSession = false
+    private var hasHandledEndedForSession = false
+    private var consecutiveSkipCount = 0
     private var currentLoadedId: String? = null
     private var preBoostSpeed: Float = 1.0f
+
+    val queueState: StateFlow<PlaybackQueueState> = playbackQueueManager.queueState
 
     val seekDurationSeconds: StateFlow<Int> = playerPreferencesRepository.seekDurationSeconds
         .stateIn(
@@ -275,8 +288,9 @@ class PlayerViewModel internal constructor(
         player.state,
         _video,
         _customError,
-        _uiFlags
-    ) { playerState, video, customError, flags ->
+        _uiFlags,
+        queueState
+    ) { playerState, video, customError, flags, queue ->
         when {
             customError != null -> customError
             playerState.playbackState == PlaybackStatus.Error && playerState.error != null -> {
@@ -333,7 +347,13 @@ class PlayerViewModel internal constructor(
                     brightnessPercent = flags.brightnessPercent,
                     zoom = flags.zoom,
                     panOffsetX = flags.panOffsetX,
-                    panOffsetY = flags.panOffsetY
+                    panOffsetY = flags.panOffsetY,
+                    hasPrevious = queue.hasPrevious,
+                    hasNext = queue.hasNext,
+                    repeatMode = queue.repeatMode,
+                    isShuffleEnabled = queue.isShuffleEnabled,
+                    queueSize = queue.size,
+                    queueIndex = queue.currentIndex
                 )
             }
         }
@@ -344,7 +364,17 @@ class PlayerViewModel internal constructor(
     )
 
     init {
-        videoIdFromNav?.let { loadMedia(it) }
+        videoIdFromNav?.let { id ->
+            if (playbackQueueManager.queueState.value.isEmpty ||
+                playbackQueueManager.queueState.value.currentVideoId != id
+            ) {
+                val found = playbackQueueManager.playItem(id)
+                if (!found) {
+                    playbackQueueManager.setQueue(listOf(id), id, QueueSource.Manual)
+                }
+            }
+            loadMedia(id)
+        }
         observePlaybackPositionForPersistence()
         observeTrackPreferences()
         loadPreferences()
@@ -404,6 +434,21 @@ class PlayerViewModel internal constructor(
                 player.audioEffectsController.setEqualizerPreset(preset)
             }
         }
+        viewModelScope.launch {
+            playerPreferencesRepository.repeatMode.collect { mode ->
+                playbackQueueManager.setRepeatMode(mode)
+            }
+        }
+        viewModelScope.launch {
+            playerPreferencesRepository.isShuffleEnabled.collect { enabled ->
+                playbackQueueManager.setShuffleEnabled(enabled)
+            }
+        }
+        viewModelScope.launch {
+            playerPreferencesRepository.isAutoNextEnabled.collect { enabled ->
+                playbackQueueManager.setAutoNextEnabled(enabled)
+            }
+        }
     }
 
     private fun observeTrackPreferences() {
@@ -449,8 +494,10 @@ class PlayerViewModel internal constructor(
 
     fun loadMedia(id: String) {
         currentLoadedId = id
+        playbackQueueManager.playItem(id)
         _customError.value = null
         hasMarkedCompletedForSession = false
+        hasHandledEndedForSession = false
         lastPersistWallTimeMs = timeProvider()
         resetZoom()
         viewModelScope.launch {
@@ -466,9 +513,12 @@ class PlayerViewModel internal constructor(
             }
 
             if (video != null) {
+                consecutiveSkipCount = 0
                 _video.value = video
-                // Resume position rule: resume if <95% completed and has valid position, else restart from 0
-                val startPosition = if (video.playbackPercentage < COMPLETION_THRESHOLD && video.playbackPositionMs > 0L) {
+                // Resume position rule: resume if <95% completed, has valid position, and not near the end
+                val isNearEnd = video.durationMs > 0L && (video.durationMs - video.playbackPositionMs) < 2000L
+                val isCompleted = video.playbackPercentage >= COMPLETION_THRESHOLD || isNearEnd
+                val startPosition = if (!isCompleted && video.playbackPositionMs > 0L && video.playbackPositionMs < video.durationMs) {
                     video.playbackPositionMs
                 } else {
                     0L
@@ -488,6 +538,7 @@ class PlayerViewModel internal constructor(
                 val isUri = id.startsWith("content://") || id.startsWith("file://") ||
                     id.startsWith("http://") || id.startsWith("https://")
                 if (isUri) {
+                    consecutiveSkipCount = 0
                     val fallbackTitle = id.substringAfterLast('/')
                     val mediaItem = NexusMediaItem(
                         mediaId = id,
@@ -499,6 +550,16 @@ class PlayerViewModel internal constructor(
                     player.play()
                     resetAutoHideTimer()
                 } else {
+                    val queue = playbackQueueManager.queueState.value
+                    if (isAutoNextEnabled.value && queue.size > 1 && consecutiveSkipCount < queue.size) {
+                        consecutiveSkipCount++
+                        val nextId = playbackQueueManager.playNext()
+                        if (nextId != null && nextId != id) {
+                            loadMedia(nextId)
+                            return@launch
+                        }
+                    }
+                    consecutiveSkipCount = 0
                     _customError.value = PlayerUiState.Error(
                         category = ErrorCategory.MissingFile,
                         userMessage = "Video file not found or inaccessible.",
@@ -585,8 +646,60 @@ class PlayerViewModel internal constructor(
     }
 
     fun setAutoNextEnabled(enabled: Boolean) {
+        playbackQueueManager.setAutoNextEnabled(enabled)
         viewModelScope.launch {
             playerPreferencesRepository.setAutoNextEnabled(enabled)
+        }
+    }
+
+    fun onPreviousClick() {
+        val currentPosition = player.state.value.currentPosition
+        when (val result = playbackQueueManager.playPrevious(currentPosition)) {
+            is PreviousResult.RestartCurrent -> {
+                seekTo(0L)
+                play()
+            }
+            is PreviousResult.PlayVideo -> {
+                loadMedia(result.videoId)
+            }
+            is PreviousResult.None -> Unit
+        }
+    }
+
+    fun onNextClick() {
+        val nextId = playbackQueueManager.playNext()
+        if (nextId != null) {
+            loadMedia(nextId)
+        }
+    }
+
+    fun cycleRepeatMode(): RepeatMode {
+        val next = playbackQueueManager.cycleRepeatMode()
+        viewModelScope.launch {
+            playerPreferencesRepository.setRepeatMode(next)
+        }
+        return next
+    }
+
+    fun setRepeatMode(mode: RepeatMode) {
+        playbackQueueManager.setRepeatMode(mode)
+        viewModelScope.launch {
+            playerPreferencesRepository.setRepeatMode(mode)
+        }
+    }
+
+    fun toggleShuffle(): Boolean {
+        val enabled = playbackQueueManager.toggleShuffle()
+        viewModelScope.launch {
+            playerPreferencesRepository.setShuffleEnabled(enabled)
+        }
+        return enabled
+    }
+
+    fun setShuffleEnabled(enabled: Boolean) {
+        playbackQueueManager.setShuffleEnabled(enabled)
+        viewModelScope.launch {
+            playerPreferencesRepository.setShuffleEnabled(enabled)
         }
     }
 
@@ -916,6 +1029,44 @@ class PlayerViewModel internal constructor(
                                 lastPlayedAt = now
                             )
                         }
+                    }
+                }
+
+                // Handle auto-next and repeat modes when playback ends
+                if (state.playbackState == PlaybackStatus.Ended && !hasHandledEndedForSession) {
+                    hasHandledEndedForSession = true
+                    handlePlaybackEnded()
+                }
+            }
+        }
+    }
+
+    private fun handlePlaybackEnded() {
+        val queue = playbackQueueManager.queueState.value
+        when (queue.repeatMode) {
+            RepeatMode.REPEAT_ONE -> {
+                seekTo(0L)
+                play()
+            }
+            RepeatMode.REPEAT_ALL -> {
+                val nextId = playbackQueueManager.playNext()
+                if (nextId != null) {
+                    if (nextId == currentLoadedId) {
+                        seekTo(0L)
+                        play()
+                    } else {
+                        loadMedia(nextId)
+                    }
+                } else {
+                    seekTo(0L)
+                    play()
+                }
+            }
+            RepeatMode.OFF -> {
+                if (isAutoNextEnabled.value) {
+                    val nextId = playbackQueueManager.playNext()
+                    if (nextId != null) {
+                        loadMedia(nextId)
                     }
                 }
             }

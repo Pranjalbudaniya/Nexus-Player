@@ -167,4 +167,36 @@ class PlayerPreferencesTest {
         assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Stretch, repository.getVideoScaleMode("video_2").first())
         assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Fit, repository.getVideoScaleMode("video_3").first())
     }
+
+    @Test
+    fun repeatMode_defaultIsOff() = runTest(testDispatcher) {
+        assertEquals(com.nexus.player.core.playback.queue.RepeatMode.OFF, repository.repeatMode.first())
+    }
+
+    @Test
+    fun repeatMode_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setRepeatMode(com.nexus.player.core.playback.queue.RepeatMode.REPEAT_ALL)
+        assertEquals(com.nexus.player.core.playback.queue.RepeatMode.REPEAT_ALL, repository.repeatMode.first())
+
+        repository.setRepeatMode(com.nexus.player.core.playback.queue.RepeatMode.REPEAT_ONE)
+        assertEquals(com.nexus.player.core.playback.queue.RepeatMode.REPEAT_ONE, repository.repeatMode.first())
+
+        repository.setRepeatMode(com.nexus.player.core.playback.queue.RepeatMode.OFF)
+        assertEquals(com.nexus.player.core.playback.queue.RepeatMode.OFF, repository.repeatMode.first())
+    }
+
+    @Test
+    fun isShuffleEnabled_defaultIsFalse() = runTest(testDispatcher) {
+        assertFalse(repository.isShuffleEnabled.first())
+    }
+
+    @Test
+    fun isShuffleEnabled_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setShuffleEnabled(true)
+        assertTrue(repository.isShuffleEnabled.first())
+
+        repository.setShuffleEnabled(false)
+        assertFalse(repository.isShuffleEnabled.first())
+    }
 }
+

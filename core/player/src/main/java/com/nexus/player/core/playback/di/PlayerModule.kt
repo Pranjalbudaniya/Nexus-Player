@@ -29,4 +29,10 @@ internal abstract class PlayerModule {
     abstract fun bindSubtitleRepository(
         impl: com.nexus.player.core.playback.repository.SubtitleRepositoryImpl
     ): com.nexus.player.core.playback.repository.SubtitleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPlaybackQueueManager(
+        impl: com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+    ): com.nexus.player.core.playback.queue.PlaybackQueueManager
 }

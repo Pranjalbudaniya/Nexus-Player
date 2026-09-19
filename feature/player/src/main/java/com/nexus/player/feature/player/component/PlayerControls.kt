@@ -35,11 +35,17 @@ import androidx.compose.material.icons.filled.PhotoSizeSelectActual
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.ScreenLockRotation
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.ZoomOutMap
+import com.nexus.player.core.playback.queue.RepeatMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -73,16 +79,18 @@ import com.nexus.player.core.playback.model.VideoScaleMode
 import com.nexus.player.feature.player.PlayerUiState
 
 /**
- * VLC-style powerful video player controls overlay for Step 17 & 20.
+ * VLC-style powerful video player controls overlay for Step 17, 20, 22.
  *
  * Layout:
  * - Top bar: Back navigation, video title, Sleep Timer indicator, Screenshot action, and More actions button
- * - Center: Primary Play/Pause toggle + Buffering spinner
+ * - Center: Primary Play/Pause toggle + Previous / Next queue controls + Buffering spinner
  * - Bottom:
  *   - Seek timeline slider with timestamps
  *   - Direct player actions row:
  *     - [Audio + Subtitles] combined button
  *     - [Playback Speed] direct pill
+ *     - [Shuffle] toggle button
+ *     - [Repeat Mode] cycling button (Off, All, One)
  *     - [Crop / Video Mode] 1-tap cycle button (Fit, Fill, Crop, Stretch, Original)
  *     - [Orientation Lock] toggle button
  *     - [Fullscreen] toggle button
@@ -93,6 +101,10 @@ fun PlayerControls(
     visible: Boolean,
     onBackClick: () -> Unit,
     onPlayPauseClick: () -> Unit,
+    onPreviousClick: () -> Unit = {},
+    onNextClick: () -> Unit = {},
+    onCycleRepeatMode: () -> Unit = {},
+    onToggleShuffle: () -> Unit = {},
     onSeek: (Long) -> Unit,
     onOpenAudioSubtitles: () -> Unit,
     onSpeedSelected: (Float) -> Unit,
@@ -229,40 +241,77 @@ fun PlayerControls(
                 }
             }
 
-            // Center Play / Pause Button
-            Box(
-                modifier = Modifier.align(Alignment.Center)
+            // Center Controls: Previous, Play/Pause, Next
+            Row(
+                modifier = Modifier.align(Alignment.Center),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.large)
             ) {
-                if (state.isBuffering) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .testTag("player_buffering_indicator"),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp
+                // Previous Button
+                IconButton(
+                    onClick = onPreviousClick,
+                    enabled = state.canGoPrevious,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("player_previous_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = "Previous video",
+                        modifier = Modifier.size(30.dp),
+                        tint = if (state.canGoPrevious) Color.White else Color.White.copy(alpha = 0.38f)
                     )
-                } else {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.6f),
-                        contentColor = Color.White,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .testTag("player_play_pause_button")
-                            .clickable(onClick = onPlayPauseClick)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = when {
-                                    state.isEnded -> Icons.Filled.Replay
-                                    state.isPlaying -> Icons.Filled.Pause
-                                    else -> Icons.Filled.PlayArrow
-                                },
-                                contentDescription = if (state.isPlaying) "Pause" else "Play",
-                                modifier = Modifier.size(36.dp)
-                            )
+                }
+
+                // Primary Play / Pause / Replay Button
+                Box(contentAlignment = Alignment.Center) {
+                    if (state.isBuffering) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .testTag("player_buffering_indicator"),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.6f),
+                            contentColor = Color.White,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .testTag("player_play_pause_button")
+                                .clickable(onClick = onPlayPauseClick)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = when {
+                                        state.isEnded -> Icons.Filled.Replay
+                                        state.isPlaying -> Icons.Filled.Pause
+                                        else -> Icons.Filled.PlayArrow
+                                    },
+                                    contentDescription = if (state.isPlaying) "Pause" else "Play",
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
                         }
                     }
+                }
+
+                // Next Button
+                IconButton(
+                    onClick = onNextClick,
+                    enabled = state.hasNext,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("player_next_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = "Next video",
+                        modifier = Modifier.size(30.dp),
+                        tint = if (state.hasNext) Color.White else Color.White.copy(alpha = 0.38f)
+                    )
                 }
             }
 
@@ -387,6 +436,70 @@ fun PlayerControls(
                                     style = MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
+                            }
+
+                            // Shuffle Button
+                            Surface(
+                                shape = CircleShape,
+                                color = if (state.isShuffleEnabled) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                contentColor = if (state.isShuffleEnabled) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                                modifier = Modifier
+                                    .testTag("player_shuffle_button")
+                                    .semantics {
+                                        contentDescription = if (state.isShuffleEnabled) "Shuffle: On" else "Shuffle: Off"
+                                        stateDescription = if (state.isShuffleEnabled) "On" else "Off"
+                                    }
+                                    .clickable(onClick = onToggleShuffle)
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(36.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Shuffle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (state.isShuffleEnabled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+
+                            // Repeat Mode Button
+                            val isRepeatActive = state.repeatMode != RepeatMode.OFF
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isRepeatActive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                contentColor = if (isRepeatActive) MaterialTheme.colorScheme.onPrimaryContainer else Color.White,
+                                modifier = Modifier
+                                    .testTag("player_repeat_button")
+                                    .semantics {
+                                        contentDescription = when (state.repeatMode) {
+                                            RepeatMode.OFF -> "Repeat: Off"
+                                            RepeatMode.REPEAT_ALL -> "Repeat: All"
+                                            RepeatMode.REPEAT_ONE -> "Repeat: One"
+                                        }
+                                        stateDescription = when (state.repeatMode) {
+                                            RepeatMode.OFF -> "Off"
+                                            RepeatMode.REPEAT_ALL -> "All"
+                                            RepeatMode.REPEAT_ONE -> "One"
+                                        }
+                                    }
+                                    .clickable(onClick = onCycleRepeatMode)
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(36.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = when (state.repeatMode) {
+                                            RepeatMode.REPEAT_ONE -> Icons.Filled.RepeatOne
+                                            else -> Icons.Filled.Repeat
+                                        },
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (isRepeatActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
                             }
 
                             // 1-Tap Crop / Video Mode Button

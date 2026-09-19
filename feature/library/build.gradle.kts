@@ -36,6 +36,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:media"))
     implementation(project(":core:navigation"))
+    implementation(project(":core:player"))
     implementation(project(":core:scanner"))
     implementation(project(":core:ui"))
 

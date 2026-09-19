@@ -11,6 +11,9 @@ import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.model.toMediaMetadata
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.navigation.FolderRoute
+import com.nexus.player.core.playback.queue.PlaybackQueueManager
+import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+import com.nexus.player.core.playback.queue.QueueSource
 import com.nexus.player.feature.library.preferences.LibraryLayoutMode
 import com.nexus.player.feature.library.preferences.LibraryPreferencesRepository
 import com.nexus.player.feature.library.preferences.LibrarySortOption
@@ -35,7 +38,8 @@ class FolderViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val libraryPreferencesRepository: LibraryPreferencesRepository,
     val thumbnailLoader: ThumbnailLoader,
-    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher
+    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
+    val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl()
 ) : ViewModel() {
 
     private val folderRoute: FolderRoute = runCatching {
@@ -128,5 +132,14 @@ class FolderViewModel @Inject constructor(
 
     fun dismissContextMenu() {
         _selectedVideoForMenu.value = null
+    }
+
+    fun playVideo(videoId: String) {
+        val currentVideos = uiState.value.videos.map { it.id }.ifEmpty { listOf(videoId) }
+        playbackQueueManager.setQueue(
+            items = currentVideos,
+            initialVideoId = videoId,
+            source = QueueSource.Folder(folderPath = folderPath, folderName = folderName)
+        )
     }
 }

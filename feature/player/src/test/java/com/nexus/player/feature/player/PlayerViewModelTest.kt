@@ -18,6 +18,8 @@ import com.nexus.player.core.playback.model.SubtitlePosition
 import com.nexus.player.core.playback.model.SubtitleTextColor
 import com.nexus.player.core.playback.model.SubtitleTextSize
 import com.nexus.player.core.playback.model.VideoScaleMode
+import com.nexus.player.core.playback.queue.QueueSource
+import com.nexus.player.core.playback.queue.RepeatMode
 import com.nexus.player.core.playback.repository.SubtitleRepository
 import com.nexus.player.core.playback.testing.FakeNexusPlayer
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepository
@@ -1168,6 +1170,184 @@ class PlayerViewModelTest {
         assertEquals(2.2f, viewModel.zoom.value)
     }
 
+    @Test
+    fun queueNavigation_nextAndPrevious() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1")
+        val v2 = createSampleVideo(id = "q_vid_2")
+        val v3 = createSampleVideo(id = "q_vid_3")
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+        fakeVideoRepository.addVideo(v3)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_1")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2", "q_vid_3"), "q_vid_1")
+        advanceUntilIdle()
+
+        // Move to next
+        viewModel.onNextClick()
+        advanceUntilIdle()
+        assertEquals("q_vid_2", viewModel.video.value?.id)
+        assertEquals("q_vid_2", viewModel.playbackQueueManager.queueState.value.currentVideoId)
+
+        // Previous when at 1000ms (<=3000ms) goes back to q_vid_1
+        fakePlayer.simulatePositionUpdate(1000L)
+        viewModel.onPreviousClick()
+        advanceUntilIdle()
+        assertEquals("q_vid_1", viewModel.video.value?.id)
+    }
+
+    @Test
+    fun queueNavigation_previousPastThreshold_restartsCurrentVideo() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1")
+        val v2 = createSampleVideo(id = "q_vid_2")
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_2")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2"), "q_vid_2")
+        advanceUntilIdle()
+
+        // Position at 5000ms (> 3000ms threshold)
+        fakePlayer.simulatePositionUpdate(5000L)
+        fakePlayer.play()
+        advanceUntilIdle()
+
+        viewModel.onPreviousClick()
+        advanceUntilIdle()
+
+        // Still on q_vid_2, but seeked to 0
+        assertEquals("q_vid_2", viewModel.video.value?.id)
+        assertEquals(0L, fakePlayer.state.value.currentPosition)
+    }
+
+    @Test
+    fun autoNext_whenEnabled_playsNextVideoOnCompletion() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1", durationMs = 10_000L)
+        val v2 = createSampleVideo(id = "q_vid_2", durationMs = 20_000L)
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_1")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2"), "q_vid_1")
+        viewModel.setAutoNextEnabled(true)
+        advanceUntilIdle()
+
+        // Simulate video ending
+        fakePlayer.simulateEnded()
+        advanceUntilIdle()
+
+        // Automatically loaded and playing v2
+        assertEquals("q_vid_2", viewModel.video.value?.id)
+        assertEquals(1, viewModel.playbackQueueManager.queueState.value.currentIndex)
+    }
+
+    @Test
+    fun autoNext_whenDisabled_stopsAtEndOfVideo() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1", durationMs = 10_000L)
+        val v2 = createSampleVideo(id = "q_vid_2", durationMs = 20_000L)
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_1")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2"), "q_vid_1")
+        viewModel.setAutoNextEnabled(false)
+        advanceUntilIdle()
+
+        // Simulate video ending
+        fakePlayer.simulateEnded()
+        advanceUntilIdle()
+
+        // Stays on v1
+        assertEquals("q_vid_1", viewModel.video.value?.id)
+        assertEquals(0, viewModel.playbackQueueManager.queueState.value.currentIndex)
+    }
+
+    @Test
+    fun repeatOne_replaysCurrentVideoOnEnd() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1", durationMs = 10_000L)
+        val v2 = createSampleVideo(id = "q_vid_2", durationMs = 20_000L)
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_1")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2"), "q_vid_1")
+        viewModel.setRepeatMode(RepeatMode.REPEAT_ONE)
+        advanceUntilIdle()
+
+        fakePlayer.simulateEnded()
+        advanceUntilIdle()
+
+        // Still on v1, seeked to 0
+        assertEquals("q_vid_1", viewModel.video.value?.id)
+        assertEquals(0L, fakePlayer.state.value.currentPosition)
+    }
+
+    @Test
+    fun repeatAll_loopsToFirstVideoOnEnd() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1", durationMs = 10_000L)
+        val v2 = createSampleVideo(id = "q_vid_2", durationMs = 20_000L)
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_2")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2"), "q_vid_2")
+        viewModel.setRepeatMode(RepeatMode.REPEAT_ALL)
+        advanceUntilIdle()
+
+        fakePlayer.simulateEnded()
+        advanceUntilIdle()
+
+        // Wrapped to v1
+        assertEquals("q_vid_1", viewModel.video.value?.id)
+        assertEquals(0, viewModel.playbackQueueManager.queueState.value.currentIndex)
+    }
+
+    @Test
+    fun shuffle_togglesWithoutRestartingCurrentVideo() = testScope.runTest {
+        val v1 = createSampleVideo(id = "q_vid_1")
+        val v2 = createSampleVideo(id = "q_vid_2")
+        val v3 = createSampleVideo(id = "q_vid_3")
+        fakeVideoRepository.addVideo(v1)
+        fakeVideoRepository.addVideo(v2)
+        fakeVideoRepository.addVideo(v3)
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "q_vid_2")))
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_1", "q_vid_2", "q_vid_3"), "q_vid_2")
+        advanceUntilIdle()
+
+        val enabled = viewModel.toggleShuffle()
+        assertTrue(enabled)
+        advanceUntilIdle()
+        val ready = viewModel.uiState.value as PlayerUiState.Ready
+        assertTrue(ready.isShuffleEnabled)
+        assertEquals("q_vid_2", viewModel.video.value?.id)
+
+        val disabled = viewModel.toggleShuffle()
+        assertFalse(disabled)
+        advanceUntilIdle()
+        val readyRestored = viewModel.uiState.value as PlayerUiState.Ready
+        assertFalse(readyRestored.isShuffleEnabled)
+        assertEquals("q_vid_2", viewModel.video.value?.id)
+    }
+
+    @Test
+    fun invalidQueueItem_skippedSafelyWhenAutoNextEnabled() = testScope.runTest {
+        // q_vid_missing is NOT in fakeVideoRepository, q_vid_valid IS
+        val vValid = createSampleVideo(id = "q_vid_valid")
+        fakeVideoRepository.addVideo(vValid)
+
+        val viewModel = createViewModel(SavedStateHandle())
+        viewModel.playbackQueueManager.setQueue(listOf("q_vid_missing", "q_vid_valid"), "q_vid_missing")
+        viewModel.setAutoNextEnabled(true)
+        advanceUntilIdle()
+
+        viewModel.loadMedia("q_vid_missing")
+        advanceUntilIdle()
+
+        // Auto-skipped to q_vid_valid!
+        assertEquals("q_vid_valid", viewModel.video.value?.id)
+    }
+
     // =========================================================================
     // Test Fake VideoRepository
     // =========================================================================
@@ -1239,6 +1419,8 @@ class PlayerViewModelTest {
         val audioBoostFlow = MutableStateFlow(100)
         val isEqualizerEnabledFlow = MutableStateFlow(false)
         val equalizerPresetFlow = MutableStateFlow("Flat")
+        val repeatModeFlow = MutableStateFlow(RepeatMode.OFF)
+        val isShuffleFlow = MutableStateFlow(false)
         val externalSubtitlesMap = mutableMapOf<String, MutableStateFlow<List<ExternalSubtitle>>>()
 
         override val playbackSpeed: Flow<Float> = speedFlow
@@ -1255,6 +1437,8 @@ class PlayerViewModelTest {
         override val audioBoostPercent: Flow<Int> = audioBoostFlow
         override val isEqualizerEnabled: Flow<Boolean> = isEqualizerEnabledFlow
         override val equalizerPreset: Flow<String> = equalizerPresetFlow
+        override val repeatMode: Flow<RepeatMode> = repeatModeFlow
+        override val isShuffleEnabled: Flow<Boolean> = isShuffleFlow
 
         override suspend fun setPlaybackSpeed(speed: Float) {
             speedFlow.value = speed
@@ -1310,6 +1494,14 @@ class PlayerViewModelTest {
 
         override suspend fun setEqualizerPreset(preset: String) {
             equalizerPresetFlow.value = preset
+        }
+
+        override suspend fun setRepeatMode(mode: RepeatMode) {
+            repeatModeFlow.value = mode
+        }
+
+        override suspend fun setShuffleEnabled(enabled: Boolean) {
+            isShuffleFlow.value = enabled
         }
 
         override fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>> {

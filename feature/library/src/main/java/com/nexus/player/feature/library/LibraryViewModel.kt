@@ -10,6 +10,9 @@ import com.nexus.player.core.database.repository.VideoRepository
 import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.model.toMediaMetadata
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
+import com.nexus.player.core.playback.queue.PlaybackQueueManager
+import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+import com.nexus.player.core.playback.queue.QueueSource
 import com.nexus.player.core.scanner.model.ScanState
 import com.nexus.player.core.scanner.orchestrator.MediaScanOrchestrator
 import com.nexus.player.feature.library.preferences.FolderSortOption
@@ -42,7 +45,8 @@ class LibraryViewModel @Inject constructor(
     private val storageAccessRepository: StorageAccessRepository,
     private val libraryPreferencesRepository: LibraryPreferencesRepository,
     val thumbnailLoader: ThumbnailLoader,
-    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher
+    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
+    val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl()
 ) : ViewModel() {
 
     private val _selectedVideoForMenu = MutableStateFlow<MediaMetadata?>(null)
@@ -208,6 +212,15 @@ class LibraryViewModel @Inject constructor(
 
     fun dismissContextMenu() {
         _selectedVideoForMenu.value = null
+    }
+
+    fun playVideo(videoId: String) {
+        val currentVideos = uiState.value.videos.map { it.id }
+        playbackQueueManager.setQueue(
+            items = currentVideos,
+            initialVideoId = videoId,
+            source = QueueSource.Library
+        )
     }
 
     private data class LibraryPreferencesSnapshot(

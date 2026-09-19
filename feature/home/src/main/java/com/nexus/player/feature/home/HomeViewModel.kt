@@ -11,6 +11,9 @@ import com.nexus.player.feature.home.domain.provider.FavoritesSectionProvider
 import com.nexus.player.feature.home.domain.provider.FoldersSectionProvider
 import com.nexus.player.feature.home.domain.provider.RecentlyAddedSectionProvider
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
+import com.nexus.player.core.playback.queue.PlaybackQueueManager
+import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
+import com.nexus.player.core.playback.queue.QueueSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,7 +51,8 @@ class HomeViewModel @Inject constructor(
     private val mediaScanOrchestrator: MediaScanOrchestrator,
     private val storageAccessRepository: StorageAccessRepository,
     val thumbnailLoader: ThumbnailLoader,
-    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher
+    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
+    val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl()
 ) : ViewModel() {
 
     private val sectionsFlow = combine(
@@ -117,4 +121,27 @@ class HomeViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000L),
         initialValue = HomeUiState.Loading
     )
+
+    fun playVideo(videoId: String) {
+        val currentSuccess = uiState.value as? HomeUiState.Success
+        val (items, source) = when {
+            currentSuccess?.continueWatching?.any { it.id == videoId } == true -> {
+                currentSuccess.continueWatching.map { it.id } to QueueSource.HomeSection("Continue Watching")
+            }
+            currentSuccess?.recentlyAdded?.any { it.id == videoId } == true -> {
+                currentSuccess.recentlyAdded.map { it.id } to QueueSource.HomeSection("Recently Added")
+            }
+            currentSuccess?.favorites?.any { it.id == videoId } == true -> {
+                currentSuccess.favorites.map { it.id } to QueueSource.Favorites
+            }
+            else -> {
+                listOf(videoId) to QueueSource.HomeSection("Home")
+            }
+        }
+        playbackQueueManager.setQueue(
+            items = items,
+            initialVideoId = videoId,
+            source = source
+        )
+    }
 }

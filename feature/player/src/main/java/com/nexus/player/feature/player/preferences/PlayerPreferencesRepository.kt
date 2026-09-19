@@ -17,6 +17,7 @@ import com.nexus.player.core.playback.model.SubtitlePosition
 import com.nexus.player.core.playback.model.SubtitleTextColor
 import com.nexus.player.core.playback.model.SubtitleTextSize
 import com.nexus.player.core.playback.model.VideoScaleMode
+import com.nexus.player.core.playback.queue.RepeatMode
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -48,6 +49,8 @@ interface PlayerPreferencesRepository {
     val audioBoostPercent: Flow<Int>
     val isEqualizerEnabled: Flow<Boolean>
     val equalizerPreset: Flow<String>
+    val repeatMode: Flow<RepeatMode>
+    val isShuffleEnabled: Flow<Boolean>
 
     suspend fun setPlaybackSpeed(speed: Float)
     suspend fun setResizeMode(mode: Int)
@@ -63,6 +66,8 @@ interface PlayerPreferencesRepository {
     suspend fun setAudioBoost(percent: Int)
     suspend fun setEqualizerEnabled(enabled: Boolean)
     suspend fun setEqualizerPreset(preset: String)
+    suspend fun setRepeatMode(mode: RepeatMode)
+    suspend fun setShuffleEnabled(enabled: Boolean)
 
     fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>>
     suspend fun addExternalSubtitle(videoId: String, subtitle: ExternalSubtitle)
@@ -94,6 +99,8 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         val AUDIO_BOOST = intPreferencesKey("key_player_audio_boost")
         val EQUALIZER_ENABLED = booleanPreferencesKey("key_player_equalizer_enabled")
         val EQUALIZER_PRESET = stringPreferencesKey("key_player_equalizer_preset")
+        val REPEAT_MODE = stringPreferencesKey("key_player_repeat_mode")
+        val SHUFFLE_ENABLED = booleanPreferencesKey("key_player_shuffle_enabled")
     }
 
     private val safePreferences: Flow<Preferences> = dataStore.data
@@ -133,6 +140,21 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override val equalizerPreset: Flow<String> = safePreferences
         .map { prefs ->
             prefs[PreferencesKeys.EQUALIZER_PRESET] ?: "Flat"
+        }
+
+    override val repeatMode: Flow<RepeatMode> = safePreferences
+        .map { prefs ->
+            val raw = prefs[PreferencesKeys.REPEAT_MODE] ?: RepeatMode.OFF.name
+            try {
+                RepeatMode.valueOf(raw)
+            } catch (_: Exception) {
+                RepeatMode.OFF
+            }
+        }
+
+    override val isShuffleEnabled: Flow<Boolean> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.SHUFFLE_ENABLED] ?: false
         }
 
     override val resizeMode: Flow<Int> = safePreferences
@@ -277,6 +299,18 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override suspend fun setEqualizerPreset(preset: String) {
         dataStore.edit { prefs ->
             prefs[PreferencesKeys.EQUALIZER_PRESET] = preset
+        }
+    }
+
+    override suspend fun setRepeatMode(mode: RepeatMode) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.REPEAT_MODE] = mode.name
+        }
+    }
+
+    override suspend fun setShuffleEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.SHUFFLE_ENABLED] = enabled
         }
     }
 

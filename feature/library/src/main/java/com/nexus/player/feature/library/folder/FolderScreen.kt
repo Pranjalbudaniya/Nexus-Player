@@ -64,7 +64,10 @@ fun FolderRoute(
         thumbnailLoader = viewModel.thumbnailLoader,
         onNavigateBack = onNavigateBack,
         onSubfolderClick = onNavigateToFolder,
-        onVideoClick = onNavigateToPlayer,
+        onVideoClick = { videoId ->
+            viewModel.playVideo(videoId)
+            onNavigateToPlayer(videoId)
+        },
         onVideoLongClick = viewModel::onVideoLongClick,
         onLayoutModeToggle = {
             val nextMode = if (uiState.layoutMode == LibraryLayoutMode.GRID) {

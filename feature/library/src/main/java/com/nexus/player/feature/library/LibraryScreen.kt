@@ -80,7 +80,10 @@ fun LibraryRoute(
     LibraryScreen(
         uiState = uiState,
         thumbnailLoader = viewModel.thumbnailLoader,
-        onVideoClick = onNavigateToPlayer,
+        onVideoClick = { videoId ->
+            viewModel.playVideo(videoId)
+            onNavigateToPlayer(videoId)
+        },
         onVideoLongClick = viewModel::onVideoLongClick,
         onFolderClick = onFolderClick,
         onTabSelected = viewModel::setSelectedTab,

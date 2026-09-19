@@ -37,6 +37,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import com.nexus.player.feature.player.component.formatPlaybackSpeed
 
+import androidx.compose.material.icons.filled.Shuffle
+import com.nexus.player.core.playback.queue.RepeatMode
+
 val SPEED_PRESETS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
 @Composable
@@ -45,6 +48,10 @@ fun PlaybackSettingsView(
     onSpeedSelected: (Float) -> Unit,
     currentSeekDurationSeconds: Int = 10,
     onSeekDurationSelected: (Int) -> Unit = {},
+    repeatMode: RepeatMode = RepeatMode.OFF,
+    onRepeatModeSelected: (RepeatMode) -> Unit = {},
+    isShuffleEnabled: Boolean = false,
+    onShuffleToggled: (Boolean) -> Unit = {},
     isAutoNextEnabled: Boolean = false,
     onAutoNextToggled: (Boolean) -> Unit = {},
     sleepTimerRemainingSeconds: Long? = null,
@@ -207,16 +214,22 @@ fun PlaybackSettingsView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
         ) {
-            listOf("Off", "All", "One").forEach { mode ->
+            listOf(
+                RepeatMode.OFF to "Off",
+                RepeatMode.REPEAT_ALL to "All",
+                RepeatMode.REPEAT_ONE to "One"
+            ).forEach { (mode, label) ->
                 FilterChip(
-                    selected = mode == "Off",
-                    onClick = {},
-                    label = { Text(mode, style = MaterialTheme.typography.labelMedium) },
+                    selected = repeatMode == mode,
+                    onClick = { onRepeatModeSelected(mode) },
+                    label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("repeat_mode_${label.lowercase()}")
                 )
             }
         }
@@ -304,6 +317,26 @@ fun PlaybackSettingsView(
         )
 
         PlayerSettingItem(
+            title = "Shuffle Queue",
+            subtitle = "Play queued videos in randomized sequence",
+            leadingIcon = Icons.Filled.Shuffle,
+            trailingValue = if (isShuffleEnabled) "On" else "Off",
+            onClick = { onShuffleToggled(!isShuffleEnabled) },
+            enabled = true,
+            testTag = "setting_shuffle_queue"
+        )
+
+        PlayerSettingItem(
+            title = "Auto-play Next",
+            subtitle = "Play subsequent video automatically",
+            leadingIcon = Icons.Filled.SkipNext,
+            trailingValue = if (isAutoNextEnabled) "On" else "Off",
+            onClick = { onAutoNextToggled(!isAutoNextEnabled) },
+            enabled = true,
+            testTag = "setting_autoplay_next"
+        )
+
+        PlayerSettingItem(
             title = "Resume Playback",
             subtitle = "Restore position when under 95%",
             leadingIcon = Icons.Filled.Replay,
@@ -311,15 +344,6 @@ fun PlaybackSettingsView(
             onClick = {},
             enabled = false,
             badgeText = "Always On"
-        )
-
-        PlayerSettingItem(
-            title = "Auto-play Next",
-            subtitle = "Play subsequent video automatically",
-            leadingIcon = Icons.Filled.SkipNext,
-            onClick = {},
-            enabled = false,
-            badgeText = "Coming Soon"
         )
     }
 }

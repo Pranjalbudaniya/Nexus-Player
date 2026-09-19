@@ -48,8 +48,17 @@ sealed interface PlayerUiState {
         val brightnessPercent: Int = 50,
         val zoom: Float = 1.0f,
         val panOffsetX: Float = 0f,
-        val panOffsetY: Float = 0f
+        val panOffsetY: Float = 0f,
+        val hasPrevious: Boolean = false,
+        val hasNext: Boolean = false,
+        val repeatMode: com.nexus.player.core.playback.queue.RepeatMode = com.nexus.player.core.playback.queue.RepeatMode.OFF,
+        val isShuffleEnabled: Boolean = false,
+        val queueSize: Int = 0,
+        val queueIndex: Int = 0
     ) : PlayerUiState {
+        val canGoPrevious: Boolean
+            get() = hasPrevious || currentPositionMs > 3000L
+
         val isBuffering: Boolean
             get() = playbackStatus == PlaybackStatus.Buffering
 

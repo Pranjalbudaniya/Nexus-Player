@@ -60,7 +60,10 @@ fun HomeRoute(
         uiState = uiState,
         thumbnailLoader = viewModel.thumbnailLoader,
         onNavigateToSettings = onNavigateToSettings,
-        onVideoClick = onVideoClick,
+        onVideoClick = { videoId ->
+            viewModel.playVideo(videoId)
+            onVideoClick(videoId)
+        },
         onFolderClick = onFolderClick,
         modifier = modifier
     )
