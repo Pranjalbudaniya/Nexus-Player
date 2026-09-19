@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,18 +22,31 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.feature.player.panel.component.PlayerSettingItem
 
-val SPEED_PRESETS = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import com.nexus.player.feature.player.component.formatPlaybackSpeed
+
+val SPEED_PRESETS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
 @Composable
 fun PlaybackSettingsView(
     currentSpeed: Float,
     onSpeedSelected: (Float) -> Unit,
+    currentSeekDurationSeconds: Int = 10,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    isAutoNextEnabled: Boolean = false,
+    onAutoNextToggled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -41,14 +55,26 @@ fun PlaybackSettingsView(
             .padding(horizontal = NexusTheme.spacing.medium)
             .testTag("playback_settings_view")
     ) {
-        Text(
-            text = "Playback Speed",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = NexusTheme.spacing.small),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Playback Speed",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = formatPlaybackSpeed(currentSpeed),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
 
-        // Speed presets rendered in 4-column rows
+        // Speed preset chips rendered in rows
         val chunked = SPEED_PRESETS.chunked(4)
         for (row in chunked) {
             Row(
@@ -56,7 +82,7 @@ fun PlaybackSettingsView(
                 horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
             ) {
                 for (speed in row) {
-                    val label = if (speed == 1.0f) "Normal" else "${speed}×"
+                    val label = if (speed == 1.0f) "1×" else "${speed}×"
                     val isSelected = (currentSpeed - speed) in -0.01f..0.01f
 
                     FilterChip(
@@ -81,6 +107,56 @@ fun PlaybackSettingsView(
             Spacer(modifier = Modifier.height(NexusTheme.spacing.extraSmall))
         }
 
+        // Custom speed fine tuning
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            IconButton(
+                onClick = {
+                    val newSpeed = (Math.round((currentSpeed - 0.05f) * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                    onSpeedSelected(newSpeed)
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Remove,
+                    contentDescription = "Decrease speed by 0.05"
+                )
+            }
+
+            Slider(
+                value = currentSpeed.coerceIn(0.25f, 3.0f),
+                onValueChange = {
+                    val stepped = (Math.round(it * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                    onSpeedSelected(stepped)
+                },
+                valueRange = 0.25f..3.0f,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("panel_custom_speed_slider")
+            )
+
+            IconButton(
+                onClick = {
+                    val newSpeed = (Math.round((currentSpeed + 0.05f) * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                    onSpeedSelected(newSpeed)
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Increase speed by 0.05"
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
@@ -96,16 +172,18 @@ fun PlaybackSettingsView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
         ) {
-            listOf("5s", "10s", "15s", "30s").forEach { step ->
+            listOf(5, 10, 15, 30).forEach { sec ->
                 FilterChip(
-                    selected = step == "10s",
-                    onClick = {},
-                    label = { Text(step, style = MaterialTheme.typography.labelMedium) },
+                    selected = currentSeekDurationSeconds == sec,
+                    onClick = { onSeekDurationSelected(sec) },
+                    label = { Text("${sec}s", style = MaterialTheme.typography.labelMedium) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("panel_seek_duration_${sec}s")
                 )
             }
         }

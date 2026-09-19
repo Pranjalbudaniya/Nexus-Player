@@ -42,6 +42,8 @@ fun PlayerLayout(
     currentDecoderMode: DecoderMode,
     onDecoderModeSelected: (DecoderMode) -> Unit,
     onShareClick: () -> Unit,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     videoContent: @Composable (modifier: Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -110,6 +112,8 @@ fun PlayerLayout(
                         onDecoderModeSelected = onDecoderModeSelected,
                         onShareClick = onShareClick,
                         onClosePanel = { panelState.close() },
+                        onSeekDurationSelected = onSeekDurationSelected,
+                        onAutoNextToggled = onAutoNextToggled,
                         modifier = Modifier.width(animatedPanelWidth)
                     )
                 }
@@ -124,7 +128,9 @@ fun PlayerLayout(
                     currentDecoderMode = currentDecoderMode,
                     onDecoderModeSelected = onDecoderModeSelected,
                     onShareClick = onShareClick,
-                    onClosePanel = { panelState.close() }
+                    onClosePanel = { panelState.close() },
+                    onSeekDurationSelected = onSeekDurationSelected,
+                    onAutoNextToggled = onAutoNextToggled
                 )
             }
         }

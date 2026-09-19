@@ -675,6 +675,200 @@ class PlayerViewModelTest {
     }
 
     // =========================================================================
+    // Step 19 Playback Speed, Seeking & Playback Behavior Tests
+    // =========================================================================
+
+    @Test
+    fun setPlaybackSpeed_clampsExtremeValues_andPersists() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_speed_clamp")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_speed_clamp")))
+        advanceUntilIdle()
+
+        // Setting speed > 3.0f should clamp to 3.0f
+        viewModel.setPlaybackSpeed(5.0f)
+        advanceUntilIdle()
+        assertEquals(3.0f, fakePlayer.state.value.playbackSpeed)
+        assertEquals(3.0f, fakePreferencesRepository.speedFlow.value)
+
+        // Setting speed < 0.25f should clamp to 0.25f
+        viewModel.setPlaybackSpeed(0.1f)
+        advanceUntilIdle()
+        assertEquals(0.25f, fakePlayer.state.value.playbackSpeed)
+        assertEquals(0.25f, fakePreferencesRepository.speedFlow.value)
+
+        // Setting fine custom speed 1.35f
+        viewModel.setPlaybackSpeed(1.35f)
+        advanceUntilIdle()
+        assertEquals(1.35f, fakePlayer.state.value.playbackSpeed, 0.001f)
+        assertEquals(1.35f, fakePreferencesRepository.speedFlow.value, 0.001f)
+    }
+
+    @Test
+    fun setTemporarySpeedBoost_temporarilyChangesSpeed_restoresPreviousSpeedOnRelease_andDoesNotPersist() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_boost")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_boost")))
+        advanceUntilIdle()
+
+        // Base speed is 1.0f
+        assertEquals(1.0f, fakePlayer.state.value.playbackSpeed)
+        assertEquals(1.0f, fakePreferencesRepository.speedFlow.value)
+
+        // Press and hold: boost active
+        val boostSpeed = viewModel.setTemporarySpeedBoost(true)
+        advanceUntilIdle()
+        assertEquals(2.0f, boostSpeed)
+        assertEquals(2.0f, fakePlayer.state.value.playbackSpeed)
+        // CRITICAL: Preferences repo MUST NOT be modified by temporary boost!
+        assertEquals(1.0f, fakePreferencesRepository.speedFlow.value)
+
+        // Release hold: restores previous user speed
+        val restoredSpeed = viewModel.setTemporarySpeedBoost(false)
+        advanceUntilIdle()
+        assertEquals(1.0f, restoredSpeed)
+        assertEquals(1.0f, fakePlayer.state.value.playbackSpeed)
+        assertEquals(1.0f, fakePreferencesRepository.speedFlow.value)
+    }
+
+    @Test
+    fun setTemporarySpeedBoost_whenAlreadyAtTwoX_boostsToTwoPointFive() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_boost_2x")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_boost_2x")))
+        advanceUntilIdle()
+
+        viewModel.setPlaybackSpeed(2.0f)
+        advanceUntilIdle()
+        assertEquals(2.0f, fakePlayer.state.value.playbackSpeed)
+
+        // Holding when already at 2.0x boosts to 2.5x
+        val boostSpeed = viewModel.setTemporarySpeedBoost(true)
+        advanceUntilIdle()
+        assertEquals(2.5f, boostSpeed)
+        assertEquals(2.5f, fakePlayer.state.value.playbackSpeed)
+        assertEquals(2.0f, fakePreferencesRepository.speedFlow.value)
+
+        // Releasing restores 2.0x
+        val restoredSpeed = viewModel.setTemporarySpeedBoost(false)
+        advanceUntilIdle()
+        assertEquals(2.0f, restoredSpeed)
+        assertEquals(2.0f, fakePlayer.state.value.playbackSpeed)
+    }
+
+    @Test
+    fun setSeekDurationSeconds_updatesUiStateAndPersists() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_seek_duration")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_seek_duration")))
+        advanceUntilIdle()
+
+        val readyState = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(10, readyState.seekDurationSeconds)
+
+        viewModel.setSeekDurationSeconds(15)
+        advanceUntilIdle()
+
+        val updatedState = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(15, updatedState.seekDurationSeconds)
+        assertEquals(15, fakePreferencesRepository.seekDurationFlow.value)
+    }
+
+    @Test
+    fun seekRelativeDirection_usesConfiguredSeekDuration_andClamps() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_seek_rel", durationMs = 60_000L)
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_seek_rel")))
+        advanceUntilIdle()
+
+        fakePlayer.simulateReady(durationMs = 60_000L)
+        fakePlayer.simulatePositionUpdate(20_000L)
+        advanceUntilIdle()
+
+        // Seek forward by default 10s -> 30_000ms
+        viewModel.seekRelativeDirection(1)
+        advanceUntilIdle()
+        assertEquals(listOf(30_000L), fakePlayer.seekPositions)
+
+        // Set seek duration to 15s and seek backward -> 15_000ms
+        viewModel.setSeekDurationSeconds(15)
+        advanceUntilIdle()
+        fakePlayer.simulatePositionUpdate(30_000L)
+        viewModel.seekRelativeDirection(-1)
+        advanceUntilIdle()
+        assertEquals(listOf(30_000L, 15_000L), fakePlayer.seekPositions)
+
+        // Clamp backward to 0
+        fakePlayer.simulatePositionUpdate(5_000L)
+        viewModel.seekRelativeDirection(-1)
+        advanceUntilIdle()
+        assertEquals(listOf(30_000L, 15_000L, 0L), fakePlayer.seekPositions)
+
+        // Clamp forward to duration (60_000L)
+        fakePlayer.simulatePositionUpdate(55_000L)
+        viewModel.seekRelativeDirection(1)
+        advanceUntilIdle()
+        assertEquals(listOf(30_000L, 15_000L, 0L, 60_000L), fakePlayer.seekPositions)
+    }
+
+    @Test
+    fun setAutoNextEnabled_updatesStateAndPersists() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_auto_next")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_auto_next")))
+        advanceUntilIdle()
+
+        val readyState = viewModel.uiState.value as PlayerUiState.Ready
+        assertFalse(readyState.isAutoNextEnabled)
+
+        viewModel.setAutoNextEnabled(true)
+        advanceUntilIdle()
+
+        val updatedState = viewModel.uiState.value as PlayerUiState.Ready
+        assertTrue(updatedState.isAutoNextEnabled)
+        assertTrue(fakePreferencesRepository.isAutoNextFlow.value)
+    }
+
+    @Test
+    fun completionBehavior_emitsVideoCompletedEvent_andAvoidsDuplicateRoomWrites() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_complete_events", durationMs = 100_000L)
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_complete_events")))
+
+        val events = mutableListOf<PlayerEvent>()
+        val job = testScope.backgroundScope.launch(UnconfinedTestDispatcher(testScope.testScheduler)) {
+            viewModel.playerEvents.collect { events.add(it) }
+        }
+
+        advanceUntilIdle()
+        fakePlayer.simulateReady(durationMs = 100_000L)
+        fakePlayer.play()
+        advanceUntilIdle()
+
+        // Jump to 95% completion
+        fakePlayer.simulatePositionUpdate(95_000L)
+        advanceUntilIdle()
+
+        // Verify VideoCompleted event fired
+        assertEquals(1, events.size)
+        assertTrue(events.first() is PlayerEvent.VideoCompleted)
+        assertEquals("vid_complete_events", (events.first() as PlayerEvent.VideoCompleted).videoId)
+
+        val writesCountAfterFirstCompletion = fakeVideoRepository.progressUpdates.size
+        assertEquals(1, writesCountAfterFirstCompletion)
+
+        // Subsequent ticks at 96% and 97% should NOT fire duplicate completion events or write duplicate DB entries
+        fakePlayer.simulatePositionUpdate(96_000L)
+        fakePlayer.simulatePositionUpdate(97_000L)
+        advanceUntilIdle()
+
+        assertEquals(1, events.size)
+        assertEquals(writesCountAfterFirstCompletion, fakeVideoRepository.progressUpdates.size)
+
+        job.cancel()
+    }
+
+    // =========================================================================
     // Test Fake VideoRepository
     // =========================================================================
 
@@ -740,6 +934,8 @@ class PlayerViewModelTest {
         val audioDelayFlow = MutableStateFlow(0L)
         val subtitleDelayFlow = MutableStateFlow(0L)
         val subtitleAppearanceFlow = MutableStateFlow(SubtitleAppearance())
+        val seekDurationFlow = MutableStateFlow(10)
+        val isAutoNextFlow = MutableStateFlow(false)
         val externalSubtitlesMap = mutableMapOf<String, MutableStateFlow<List<ExternalSubtitle>>>()
 
         override val playbackSpeed: Flow<Float> = speedFlow
@@ -751,6 +947,8 @@ class PlayerViewModelTest {
         override val audioDelayMs: Flow<Long> = audioDelayFlow
         override val subtitleDelayMs: Flow<Long> = subtitleDelayFlow
         override val subtitleAppearance: Flow<SubtitleAppearance> = subtitleAppearanceFlow
+        override val seekDurationSeconds: Flow<Int> = seekDurationFlow
+        override val isAutoNextEnabled: Flow<Boolean> = isAutoNextFlow
 
         override suspend fun setPlaybackSpeed(speed: Float) {
             speedFlow.value = speed
@@ -786,6 +984,14 @@ class PlayerViewModelTest {
 
         override suspend fun setSubtitleAppearance(appearance: SubtitleAppearance) {
             subtitleAppearanceFlow.value = appearance
+        }
+
+        override suspend fun setSeekDurationSeconds(duration: Int) {
+            seekDurationFlow.value = duration
+        }
+
+        override suspend fun setAutoNextEnabled(enabled: Boolean) {
+            isAutoNextFlow.value = enabled
         }
 
         override fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>> {

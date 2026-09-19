@@ -30,6 +30,8 @@ fun PlayerSettingsBottomSheet(
     onDecoderModeSelected: (DecoderMode) -> Unit,
     onShareClick: () -> Unit,
     onClosePanel: () -> Unit,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -50,6 +52,8 @@ fun PlayerSettingsBottomSheet(
             onDecoderModeSelected = onDecoderModeSelected,
             onShareClick = onShareClick,
             onClosePanel = onClosePanel,
+            onSeekDurationSelected = onSeekDurationSelected,
+            onAutoNextToggled = onAutoNextToggled,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = NexusTheme.spacing.large)

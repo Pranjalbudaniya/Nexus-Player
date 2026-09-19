@@ -37,7 +37,9 @@ sealed interface PlayerUiState {
         val scaleMode: com.nexus.player.core.playback.model.VideoScaleMode = com.nexus.player.core.playback.model.VideoScaleMode.Fit,
         val isOrientationLocked: Boolean = false,
         val isFullscreen: Boolean = false,
-        val isPanelOpen: Boolean = false
+        val isPanelOpen: Boolean = false,
+        val seekDurationSeconds: Int = 10,
+        val isAutoNextEnabled: Boolean = false
     ) : PlayerUiState {
         val isBuffering: Boolean
             get() = playbackStatus == PlaybackStatus.Buffering

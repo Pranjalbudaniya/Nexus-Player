@@ -78,9 +78,22 @@ fun PlayerRoute(
 
     val playerState by viewModel.player.state.collectAsStateWithLifecycle()
     val isLandscapeVideo = playerState.isLandscapeVideo
+    val seekDurationSeconds by viewModel.seekDurationSeconds.collectAsStateWithLifecycle()
+    val isAutoNextEnabled by viewModel.isAutoNextEnabled.collectAsStateWithLifecycle()
 
     var showAudioSubtitlesSheet by remember { mutableStateOf(false) }
     var hudState by remember { mutableStateOf<GestureHudState>(GestureHudState.None) }
+
+    // Listen to one-off player events
+    LaunchedEffect(Unit) {
+        viewModel.playerEvents.collect { event ->
+            when (event) {
+                is PlayerEvent.VideoCompleted -> {
+                    // Completion recorded; ready for auto-next if enabled
+                }
+            }
+        }
+    }
 
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -122,7 +135,7 @@ fun PlayerRoute(
     // Auto-dismiss HUD
     LaunchedEffect(hudState) {
         if (hudState !is GestureHudState.None && hudState !is GestureHudState.SpeedBoost) {
-            kotlinx.coroutines.delay(1500L)
+            kotlinx.coroutines.delay(1000L)
             hudState = GestureHudState.None
         }
     }
@@ -208,18 +221,18 @@ fun PlayerRoute(
     }
 
     val onSeekBackward: () -> Unit = {
-        viewModel.seekRelative(-10)
-        hudState = GestureHudState.Seek(10, isForward = false)
+        viewModel.seekRelativeDirection(-1)
+        hudState = GestureHudState.Seek(seekDurationSeconds, isForward = false)
     }
 
     val onSeekForward: () -> Unit = {
-        viewModel.seekRelative(10)
-        hudState = GestureHudState.Seek(10, isForward = true)
+        viewModel.seekRelativeDirection(1)
+        hudState = GestureHudState.Seek(seekDurationSeconds, isForward = true)
     }
 
     val onSpeedBoost: (Boolean) -> Unit = { boosting ->
-        viewModel.setTemporarySpeedBoost(boosting)
-        hudState = if (boosting) GestureHudState.SpeedBoost(2.0f) else GestureHudState.None
+        val boostSpeed = viewModel.setTemporarySpeedBoost(boosting)
+        hudState = if (boosting) GestureHudState.SpeedBoost(boostSpeed) else GestureHudState.None
     }
 
     val onShareClick: () -> Unit = {
@@ -256,6 +269,8 @@ fun PlayerRoute(
         onOpenAudioSubtitles = { showAudioSubtitlesSheet = true },
         onDismissAudioSubtitles = { showAudioSubtitlesSheet = false },
         onSpeedSelected = { speed -> viewModel.setPlaybackSpeed(speed) },
+        onSeekDurationSelected = { sec -> viewModel.setSeekDurationSeconds(sec) },
+        onAutoNextToggled = { enabled -> viewModel.setAutoNextEnabled(enabled) },
         onCycleCropMode = { viewModel.cycleVideoScaleMode() },
         onToggleOrientationLock = onToggleOrientationLock,
         onDecoderModeSelected = { mode -> viewModel.setDecoderMode(mode) },
@@ -300,6 +315,8 @@ fun PlayerScreen(
     onOpenAudioSubtitles: () -> Unit = {},
     onDismissAudioSubtitles: () -> Unit = {},
     onSpeedSelected: (Float) -> Unit = {},
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     onCycleCropMode: () -> Unit = {},
     onToggleOrientationLock: () -> Unit = {},
     onToggleOrientation: () -> Unit = {},
@@ -325,6 +342,8 @@ fun PlayerScreen(
         currentDecoderMode = currentDecoderMode,
         onDecoderModeSelected = onDecoderModeSelected,
         onShareClick = onShareClick,
+        onSeekDurationSelected = onSeekDurationSelected,
+        onAutoNextToggled = onAutoNextToggled,
         videoContent = { videoModifier ->
             Box(
                 modifier = videoModifier

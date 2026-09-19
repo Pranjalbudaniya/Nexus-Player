@@ -41,6 +41,8 @@ fun PlayerSettingsContent(
     onDecoderModeSelected: (DecoderMode) -> Unit,
     onShareClick: () -> Unit,
     onClosePanel: () -> Unit,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -91,7 +93,9 @@ fun PlayerSettingsContent(
                 state = state,
                 currentDecoderMode = currentDecoderMode,
                 onDecoderModeSelected = onDecoderModeSelected,
-                onShareClick = onShareClick
+                onShareClick = onShareClick,
+                onSeekDurationSelected = onSeekDurationSelected,
+                onAutoNextToggled = onAutoNextToggled
             )
         }
     }

@@ -42,6 +42,8 @@ interface PlayerPreferencesRepository {
     val audioDelayMs: Flow<Long>
     val subtitleDelayMs: Flow<Long>
     val subtitleAppearance: Flow<SubtitleAppearance>
+    val seekDurationSeconds: Flow<Int>
+    val isAutoNextEnabled: Flow<Boolean>
 
     suspend fun setPlaybackSpeed(speed: Float)
     suspend fun setResizeMode(mode: Int)
@@ -52,6 +54,8 @@ interface PlayerPreferencesRepository {
     suspend fun setAudioDelayMs(delayMs: Long)
     suspend fun setSubtitleDelayMs(delayMs: Long)
     suspend fun setSubtitleAppearance(appearance: SubtitleAppearance)
+    suspend fun setSeekDurationSeconds(duration: Int)
+    suspend fun setAutoNextEnabled(enabled: Boolean)
 
     fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>>
     suspend fun addExternalSubtitle(videoId: String, subtitle: ExternalSubtitle)
@@ -75,6 +79,8 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         val SUBTITLE_TEXT_COLOR = stringPreferencesKey("key_player_sub_text_color")
         val SUBTITLE_BG_STYLE = stringPreferencesKey("key_player_sub_bg_style")
         val SUBTITLE_POSITION = stringPreferencesKey("key_player_sub_position")
+        val SEEK_DURATION_SECONDS = intPreferencesKey("key_player_seek_duration_seconds")
+        val AUTO_NEXT_ENABLED = booleanPreferencesKey("key_player_auto_next_enabled")
     }
 
     private val safePreferences: Flow<Preferences> = dataStore.data
@@ -89,6 +95,16 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override val playbackSpeed: Flow<Float> = safePreferences
         .map { prefs ->
             prefs[PreferencesKeys.PLAYBACK_SPEED] ?: 1.0f
+        }
+
+    override val seekDurationSeconds: Flow<Int> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.SEEK_DURATION_SECONDS] ?: 10
+        }
+
+    override val isAutoNextEnabled: Flow<Boolean> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.AUTO_NEXT_ENABLED] ?: false
         }
 
     override val resizeMode: Flow<Int> = safePreferences
@@ -203,6 +219,18 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
             prefs[PreferencesKeys.SUBTITLE_TEXT_COLOR] = appearance.textColor.name
             prefs[PreferencesKeys.SUBTITLE_BG_STYLE] = appearance.backgroundStyle.name
             prefs[PreferencesKeys.SUBTITLE_POSITION] = appearance.position.name
+        }
+    }
+
+    override suspend fun setSeekDurationSeconds(duration: Int) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.SEEK_DURATION_SECONDS] = duration
+        }
+    }
+
+    override suspend fun setAutoNextEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.AUTO_NEXT_ENABLED] = enabled
         }
     }
 

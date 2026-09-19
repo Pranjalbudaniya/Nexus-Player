@@ -28,6 +28,8 @@ fun PlayerSettingsSidePanel(
     onDecoderModeSelected: (DecoderMode) -> Unit,
     onShareClick: () -> Unit,
     onClosePanel: () -> Unit,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -49,7 +51,9 @@ fun PlayerSettingsSidePanel(
                 currentDecoderMode = currentDecoderMode,
                 onDecoderModeSelected = onDecoderModeSelected,
                 onShareClick = onShareClick,
-                onClosePanel = onClosePanel
+                onClosePanel = onClosePanel,
+                onSeekDurationSelected = onSeekDurationSelected,
+                onAutoNextToggled = onAutoNextToggled
             )
         }
     }

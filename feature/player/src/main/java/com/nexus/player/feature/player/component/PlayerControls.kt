@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Crop
@@ -30,12 +31,17 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.ScreenLockRotation
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.ZoomOutMap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import java.util.Locale
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -253,6 +259,10 @@ fun PlayerControls(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .semantics {
+                                contentDescription = "Playback timeline, ${formatDuration(displayPositionMs)} of ${formatDuration(state.durationMs)}"
+                                stateDescription = formatDuration(displayPositionMs)
+                            }
                             .testTag("player_seek_slider")
                     )
 
@@ -274,6 +284,7 @@ fun PlayerControls(
                                 contentColor = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
                                     .testTag("player_audio_subtitles_button")
+                                    .semantics { contentDescription = "Audio and subtitle tracks" }
                                     .clickable(onClick = onOpenAudioSubtitles)
                             ) {
                                 Row(
@@ -317,10 +328,13 @@ fun PlayerControls(
                                 contentColor = Color.White,
                                 modifier = Modifier
                                     .testTag("player_speed_button")
+                                    .semantics {
+                                        contentDescription = "Playback speed, currently ${formatPlaybackSpeed(state.playbackSpeed)}"
+                                    }
                                     .clickable { showSpeedDialog = true }
                             ) {
                                 Text(
-                                    text = "${state.playbackSpeed}×",
+                                    text = formatPlaybackSpeed(state.playbackSpeed),
                                     style = MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
@@ -398,30 +412,33 @@ fun PlayerControls(
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "${state.playbackSpeed}×",
+                            text = formatPlaybackSpeed(state.playbackSpeed),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
 
-                    // Speed preset chips
+                    // Speed preset chips (0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, 2x)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(0.5f, 0.75f, 1.0f, 1.25f).forEach { speed ->
+                            val isSelected = Math.abs(state.playbackSpeed - speed) < 0.01f
                             FilterChip(
-                                selected = state.playbackSpeed == speed,
+                                selected = isSelected,
                                 onClick = {
                                     onSpeedSelected(speed)
                                     showSpeedDialog = false
                                 },
-                                label = { Text("${speed}×", style = MaterialTheme.typography.labelSmall) },
+                                label = { Text(if (speed == 1.0f) "1×" else "${speed}×", style = MaterialTheme.typography.labelSmall) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 ),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("speed_preset_${speed}")
                             )
                         }
                     }
@@ -431,35 +448,111 @@ fun PlayerControls(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(1.5f, 1.75f, 2.0f).forEach { speed ->
+                            val isSelected = Math.abs(state.playbackSpeed - speed) < 0.01f
                             FilterChip(
-                                selected = state.playbackSpeed == speed,
+                                selected = isSelected,
                                 onClick = {
                                     onSpeedSelected(speed)
                                     showSpeedDialog = false
                                 },
-                                label = { Text("${speed}×", style = MaterialTheme.typography.labelSmall) },
+                                label = { Text(if (speed == 2.0f) "2×" else "${speed}×", style = MaterialTheme.typography.labelSmall) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                                     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 ),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("speed_preset_${speed}")
                             )
                         }
                     }
 
-                    // Custom slider
-                    Slider(
-                        value = state.playbackSpeed,
-                        onValueChange = { onSpeedSelected((it * 4).toInt() / 4f) },
-                        valueRange = 0.25f..2.5f,
-                        steps = 8,
-                        colors = SliderDefaults.colors(
-                            thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTrackColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
+                    // Custom speed fine tuning with 0.05x precision
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Custom Speed",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatPlaybackSpeed(state.playbackSpeed),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newSpeed = (Math.round((state.playbackSpeed - 0.05f) * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                                    onSpeedSelected(newSpeed)
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Remove,
+                                    contentDescription = "Decrease speed by 0.05"
+                                )
+                            }
+
+                            Slider(
+                                value = state.playbackSpeed.coerceIn(0.25f, 3.0f),
+                                onValueChange = {
+                                    val stepped = (Math.round(it * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                                    onSpeedSelected(stepped)
+                                },
+                                valueRange = 0.25f..3.0f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = MaterialTheme.colorScheme.primary,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("custom_speed_slider")
+                            )
+
+                            IconButton(
+                                onClick = {
+                                    val newSpeed = (Math.round((state.playbackSpeed + 0.05f) * 20f) / 20f).coerceIn(0.25f, 3.0f)
+                                    onSpeedSelected(newSpeed)
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Increase speed by 0.05"
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Formats playback speed clearly (e.g. "1×", "1.5×", "1.35×", "2×").
+ */
+fun formatPlaybackSpeed(speed: Float): String {
+    val rounded = Math.round(speed * 100f) / 100f
+    return if (rounded % 1f == 0f) {
+        "${rounded.toInt()}×"
+    } else if (Math.abs((rounded * 10f) % 1f) < 0.001f) {
+        String.format(Locale.US, "%.1f×", rounded)
+    } else {
+        String.format(Locale.US, "%.2f×", rounded)
     }
 }

@@ -1,5 +1,6 @@
 package com.nexus.player.feature.player.panel.category
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.FilterChip
@@ -48,6 +50,8 @@ fun MoreSettingsView(
     currentDecoderMode: DecoderMode,
     onDecoderModeSelected: (DecoderMode) -> Unit,
     onShareClick: () -> Unit,
+    onSeekDurationSelected: (Int) -> Unit = {},
+    onAutoNextToggled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -56,6 +60,55 @@ fun MoreSettingsView(
             .padding(horizontal = NexusTheme.spacing.medium)
             .testTag("more_settings_view")
     ) {
+        Text(
+            text = "Playback",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
+        )
+
+        Text(
+            text = "Seek Duration",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = NexusTheme.spacing.extraSmall, bottom = NexusTheme.spacing.extraSmall)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
+        ) {
+            listOf(5, 10, 15, 30).forEach { sec ->
+                FilterChip(
+                    selected = state.seekDurationSeconds == sec,
+                    onClick = { onSeekDurationSelected(sec) },
+                    label = { Text("${sec}s", style = MaterialTheme.typography.labelSmall) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("seek_duration_${sec}s")
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+
+        PlayerSettingItem(
+            title = "Auto-play Next",
+            subtitle = "Play subsequent video automatically",
+            leadingIcon = Icons.Filled.SkipNext,
+            trailingValue = if (state.isAutoNextEnabled) "On" else "Off",
+            onClick = { onAutoNextToggled(!state.isAutoNextEnabled) },
+            testTag = "setting_auto_next"
+        )
+
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+
         Text(
             text = "Actions",
             style = MaterialTheme.typography.titleSmall,

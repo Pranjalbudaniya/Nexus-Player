@@ -22,9 +22,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -36,6 +39,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
+/**
+ * One-off player events emitted to the UI/navigation layer.
+ */
+sealed interface PlayerEvent {
+    data class VideoCompleted(val videoId: String) : PlayerEvent
+}
 
 /**
  * ViewModel managing the active video playback session.
@@ -108,20 +118,54 @@ class PlayerViewModel internal constructor(
     private var currentLoadedId: String? = null
     private var preBoostSpeed: Float = 1.0f
 
+    val seekDurationSeconds: StateFlow<Int> = playerPreferencesRepository.seekDurationSeconds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = 10
+        )
+
+    val isAutoNextEnabled: StateFlow<Boolean> = playerPreferencesRepository.isAutoNextEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
+    private val _playerEvents = MutableSharedFlow<PlayerEvent>(extraBufferCapacity = 8)
+    val playerEvents: SharedFlow<PlayerEvent> = _playerEvents.asSharedFlow()
+
     private data class UiFlags(
         val controlsVisible: Boolean,
         val isPanelOpen: Boolean,
         val isOrientationLocked: Boolean,
-        val isFullscreen: Boolean
+        val isFullscreen: Boolean,
+        val seekDurationSeconds: Int,
+        val isAutoNextEnabled: Boolean
     )
+
+    private val _playerSettingsFlags = combine(
+        seekDurationSeconds,
+        isAutoNextEnabled
+    ) { seekDuration, autoNext ->
+        seekDuration to autoNext
+    }
 
     private val _uiFlags = combine(
         _controlsVisible,
         _isPanelOpen,
         _isOrientationLocked,
-        _isFullscreen
-    ) { controlsVisible, isPanelOpen, isOrientationLocked, isFullscreen ->
-        UiFlags(controlsVisible, isPanelOpen, isOrientationLocked, isFullscreen)
+        _isFullscreen,
+        _playerSettingsFlags
+    ) { controlsVisible, isPanelOpen, isOrientationLocked, isFullscreen, settingsFlags ->
+        UiFlags(
+            controlsVisible = controlsVisible,
+            isPanelOpen = isPanelOpen,
+            isOrientationLocked = isOrientationLocked,
+            isFullscreen = isFullscreen,
+            seekDurationSeconds = settingsFlags.first,
+            isAutoNextEnabled = settingsFlags.second
+        )
     }
 
     val uiState: StateFlow<PlayerUiState> = combine(
@@ -175,7 +219,9 @@ class PlayerViewModel internal constructor(
                     scaleMode = playerState.scaleMode,
                     isOrientationLocked = flags.isOrientationLocked,
                     isFullscreen = flags.isFullscreen,
-                    isPanelOpen = flags.isPanelOpen
+                    isPanelOpen = flags.isPanelOpen,
+                    seekDurationSeconds = flags.seekDurationSeconds,
+                    isAutoNextEnabled = flags.isAutoNextEnabled
                 )
             }
         }
@@ -352,7 +398,10 @@ class PlayerViewModel internal constructor(
     }
 
     fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs)
+        val duration = player.state.value.duration
+        val maxDuration = if (duration > 0L) duration else Long.MAX_VALUE
+        val clamped = positionMs.coerceIn(0L, maxDuration)
+        player.seekTo(clamped)
         persistCurrentProgressImmediately()
         resetAutoHideTimer()
     }
@@ -370,11 +419,55 @@ class PlayerViewModel internal constructor(
         setControlsVisible(!_controlsVisible.value)
     }
 
+    fun validateSpeed(speed: Float): Float {
+        if (speed <= 0f || speed.isNaN() || speed.isInfinite()) return 1.0f
+        return speed.coerceIn(0.25f, 3.0f)
+    }
+
     fun setPlaybackSpeed(speed: Float) {
-        player.setPlaybackSpeed(speed)
+        val clamped = validateSpeed(speed)
+        player.setPlaybackSpeed(clamped)
         viewModelScope.launch {
-            playerPreferencesRepository.setPlaybackSpeed(speed)
+            playerPreferencesRepository.setPlaybackSpeed(clamped)
         }
+    }
+
+    fun setTemporarySpeedBoost(boost: Boolean): Float {
+        return if (boost) {
+            preBoostSpeed = player.state.value.playbackSpeed
+            val boostSpeed = if (preBoostSpeed < 2.0f) 2.0f else (preBoostSpeed + 0.5f).coerceAtMost(3.0f)
+            player.setPlaybackSpeed(boostSpeed)
+            boostSpeed
+        } else {
+            player.setPlaybackSpeed(preBoostSpeed)
+            preBoostSpeed
+        }
+    }
+
+    fun setSeekDurationSeconds(duration: Int) {
+        val clamped = duration.coerceIn(5, 60)
+        viewModelScope.launch {
+            playerPreferencesRepository.setSeekDurationSeconds(clamped)
+        }
+    }
+
+    fun setAutoNextEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            playerPreferencesRepository.setAutoNextEnabled(enabled)
+        }
+    }
+
+    fun seekRelative(deltaSeconds: Int) {
+        val current = player.state.value.currentPosition
+        val duration = player.state.value.duration
+        val maxDuration = if (duration > 0L) duration else Long.MAX_VALUE
+        val target = (current + deltaSeconds * 1000L).coerceIn(0L, maxDuration)
+        seekTo(target)
+    }
+
+    fun seekRelativeDirection(direction: Int) {
+        val stepSec = seekDurationSeconds.value
+        seekRelative(direction * stepSec)
     }
 
     fun cycleVideoScaleMode(): VideoScaleMode {
@@ -385,22 +478,6 @@ class PlayerViewModel internal constructor(
 
     fun setVideoScaleMode(mode: VideoScaleMode) {
         player.setVideoScaleMode(mode)
-    }
-
-    fun seekRelative(deltaSeconds: Int) {
-        val current = player.state.value.currentPosition
-        val duration = player.state.value.duration
-        val target = (current + deltaSeconds * 1000L).coerceIn(0L, if (duration > 0L) duration else Long.MAX_VALUE)
-        seekTo(target)
-    }
-
-    fun setTemporarySpeedBoost(boost: Boolean) {
-        if (boost) {
-            preBoostSpeed = player.state.value.playbackSpeed
-            player.setPlaybackSpeed(2.0f)
-        } else {
-            player.setPlaybackSpeed(preBoostSpeed)
-        }
     }
 
     fun selectAudioTrack(trackId: String) {
@@ -554,7 +631,7 @@ class PlayerViewModel internal constructor(
                 val now = timeProvider()
 
                 // Rule: >=95% completion immediately marks completed and removes from Continue Watching
-                if (percentage >= COMPLETION_THRESHOLD && !hasMarkedCompletedForSession) {
+                if ((percentage >= COMPLETION_THRESHOLD || state.playbackState == PlaybackStatus.Ended) && !hasMarkedCompletedForSession) {
                     hasMarkedCompletedForSession = true
                     lastPersistWallTimeMs = now
                     lastPersistedPositionMs = position
@@ -566,6 +643,7 @@ class PlayerViewModel internal constructor(
                             lastPlayedAt = now
                         )
                     }
+                    _playerEvents.tryEmit(PlayerEvent.VideoCompleted(video.id))
                 } else if (state.isPlaying && (now - lastPersistWallTimeMs >= PROGRESS_DEBOUNCE_MS)) {
                     // Throttled persistence during active playback
                     if (position != lastPersistedPositionMs) {

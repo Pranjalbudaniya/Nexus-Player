@@ -304,8 +304,9 @@ internal class Media3PlayerImpl @Inject constructor(
     override fun seekTo(positionMs: Long) {
         if (released) return
         val player = exoPlayer ?: return
-        val clampedPosition = if (player.duration > 0L) {
-            positionMs.coerceIn(0L, player.duration)
+        val duration = player.duration.coerceAtLeast(0L)
+        val clampedPosition = if (duration > 0L) {
+            positionMs.coerceIn(0L, duration)
         } else {
             positionMs.coerceAtLeast(0L)
         }
@@ -318,13 +319,14 @@ internal class Media3PlayerImpl @Inject constructor(
 
     override fun setPlaybackSpeed(speed: Float) {
         if (released) return
-        if (speed <= 0f) {
+        if (speed <= 0f || speed.isNaN() || speed.isInfinite()) {
             Log.w(TAG, "setPlaybackSpeed() called with invalid speed $speed — ignoring.")
             return
         }
-        exoPlayer?.setPlaybackSpeed(speed)
+        val clampedSpeed = speed.coerceIn(0.25f, 3.0f)
+        exoPlayer?.setPlaybackSpeed(clampedSpeed)
         _state.update { current ->
-            current.copy(playbackSpeed = speed)
+            current.copy(playbackSpeed = clampedSpeed)
         }
     }
 
