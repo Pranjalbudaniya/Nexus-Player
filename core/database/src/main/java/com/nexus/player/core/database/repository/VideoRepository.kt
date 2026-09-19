@@ -1,0 +1,120 @@
+package com.nexus.player.core.database.repository
+
+import com.nexus.player.core.database.model.Video
+import com.nexus.player.core.database.model.VideoFolder
+import com.nexus.player.core.database.model.VideoSortOrder
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * Repository interface defining operations on local video media records.
+ *
+ * Exposes reactive [Flow] streams of pure domain [Video] objects, decoupling
+ * data-access logic from consumers.
+ */
+interface VideoRepository {
+
+    /**
+     * Observe all videos with the requested [sortOrder].
+     */
+    fun getAllVideos(sortOrder: VideoSortOrder = VideoSortOrder.TITLE_ASC): Flow<List<Video>>
+
+    /**
+     * Observe recently added videos up to [limit].
+     */
+    fun getRecentlyAddedVideos(limit: Int = 20): Flow<List<Video>>
+
+    /**
+     * Observe favorite videos.
+     */
+    fun getFavoriteVideos(): Flow<List<Video>>
+
+    /**
+     * Observe favorite videos up to [limit].
+     */
+    fun getFavoriteVideos(limit: Int): Flow<List<Video>> = getFavoriteVideos()
+
+    /**
+     * Observe in-progress videos eligible for "Continue Watching".
+     */
+    fun getContinueWatchingVideos(limit: Int = 10): Flow<List<Video>>
+
+    /**
+     * Observe playback history.
+     */
+    fun getHistoryVideos(limit: Int = 20): Flow<List<Video>>
+
+    /**
+     * Observe videos within a specific [folderPath].
+     */
+    fun getVideosByFolder(folderPath: String): Flow<List<Video>>
+
+    /**
+     * Observe available folders with counts.
+     */
+    fun getFolders(): Flow<List<VideoFolder>>
+
+    /**
+     * Retrieve a video by its stable unique [id].
+     */
+    suspend fun getVideoById(id: String): Video?
+
+    /**
+     * Retrieve a video by its content/file [mediaUri].
+     */
+    suspend fun getVideoByUri(mediaUri: String): Video?
+
+    /**
+     * Total number of indexed videos.
+     */
+    suspend fun getVideosCount(): Int
+
+    /**
+     * Strictly insert a video. Fails if duplicate exists.
+     */
+    suspend fun insertVideo(video: Video): Long
+
+    /**
+     * Upsert a video (inserts or updates).
+     */
+    suspend fun upsertVideo(video: Video)
+
+    /**
+     * Bulk upsert videos (batch scanning).
+     */
+    suspend fun upsertVideos(videos: List<Video>)
+
+    /**
+     * Update playback progress and completion metrics.
+     */
+    suspend fun updatePlaybackProgress(
+        id: String,
+        positionMs: Long,
+        percentage: Float,
+        lastPlayedAt: Long
+    )
+
+    /**
+     * Toggle or set favorite state.
+     */
+    suspend fun setFavorite(id: String, isFavorite: Boolean)
+
+    /**
+     * Delete a video record by stable [id].
+     */
+    suspend fun deleteVideo(id: String)
+
+    /**
+     * Delete a video record by [mediaUri].
+     */
+    suspend fun deleteVideoByUri(mediaUri: String)
+
+    /**
+     * Clean up stale records no longer found in [validIds].
+     */
+    suspend fun deleteStaleVideos(validIds: List<String>)
+
+    /**
+     * Clear all video records.
+     */
+    suspend fun clearAll()
+}
