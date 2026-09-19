@@ -44,6 +44,7 @@ class FolderViewModelTest {
     private lateinit var folderRepository: FakeFolderRepository
     private lateinit var preferencesRepository: FakePreferencesRepository
     private lateinit var thumbnailLoader: FakeThumbnailLoader
+    private lateinit var fileOperationsManager: FakeVideoFileOperationsManager
     private lateinit var viewModel: FolderViewModel
 
     @Before
@@ -52,6 +53,7 @@ class FolderViewModelTest {
         folderRepository = FakeFolderRepository()
         preferencesRepository = FakePreferencesRepository()
         thumbnailLoader = FakeThumbnailLoader()
+        fileOperationsManager = FakeVideoFileOperationsManager()
 
         val savedStateHandle = SavedStateHandle(
             mapOf(
@@ -65,6 +67,7 @@ class FolderViewModelTest {
             folderRepository = folderRepository,
             libraryPreferencesRepository = preferencesRepository,
             thumbnailLoader = thumbnailLoader,
+            fileOperationsManager = fileOperationsManager,
             ioDispatcher = testDispatcher
         )
     }
@@ -166,6 +169,96 @@ class FolderViewModelTest {
         viewModel.showSortSheet(false)
         val hidden = viewModel.uiState.first { !it.isSortSheetVisible }
         assertFalse(hidden.isSortSheetVisible)
+    }
+
+    @Test
+    fun toggleFavorite_callsFileOperationsManager() = runTest {
+        val video = createSampleVideo(id = "v1", title = "Die Hard")
+        folderRepository.setVideosInFolder(listOf(video))
+        val metadata = viewModel.uiState.first { it.videos.isNotEmpty() }.videos.first()
+
+        viewModel.toggleFavorite(metadata)
+        assertEquals(true, fileOperationsManager.favoriteVideos["v1"])
+    }
+
+    @Test
+    fun renameVideo_delegatesToFileOperationsManager() = runTest {
+        val video = createSampleVideo(id = "v1", title = "Die Hard")
+        folderRepository.setVideosInFolder(listOf(video))
+        val metadata = viewModel.uiState.first { it.videos.isNotEmpty() }.videos.first()
+
+        var callbackInvoked = false
+        viewModel.renameVideo(metadata, "Die Harder") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+
+        assertTrue(callbackInvoked)
+        assertEquals("v1" to "Die Harder", fileOperationsManager.renamedVideos.first())
+    }
+
+    @Test
+    fun moveVideo_delegatesToFileOperationsManager() = runTest {
+        val video = createSampleVideo(id = "v1", title = "Die Hard")
+        folderRepository.setVideosInFolder(listOf(video))
+        val metadata = viewModel.uiState.first { it.videos.isNotEmpty() }.videos.first()
+
+        var callbackInvoked = false
+        viewModel.moveVideo(metadata, "/storage/emulated/0/Movies/Classics") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+
+        assertTrue(callbackInvoked)
+        assertEquals("v1" to "/storage/emulated/0/Movies/Classics", fileOperationsManager.movedVideos.first())
+    }
+
+    @Test
+    fun copyVideo_delegatesToFileOperationsManager() = runTest {
+        val video = createSampleVideo(id = "v1", title = "Die Hard")
+        folderRepository.setVideosInFolder(listOf(video))
+        val metadata = viewModel.uiState.first { it.videos.isNotEmpty() }.videos.first()
+
+        var callbackInvoked = false
+        viewModel.copyVideo(metadata, "/storage/emulated/0/Movies/Classics") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+
+        assertTrue(callbackInvoked)
+        assertEquals("v1" to "/storage/emulated/0/Movies/Classics", fileOperationsManager.copiedVideos.first())
+    }
+
+    @Test
+    fun deleteVideo_stagesAndRemovesFromQueue() = runTest {
+        val video = createSampleVideo(id = "v1", title = "Die Hard")
+        folderRepository.setVideosInFolder(listOf(video))
+        val metadata = viewModel.uiState.first { it.videos.isNotEmpty() }.videos.first()
+
+        viewModel.playVideo("v1")
+        assertEquals(listOf("v1"), viewModel.playbackQueueManager.queueState.value.items)
+
+        var callbackInvoked = false
+        viewModel.deleteVideo(metadata) { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("v1"), fileOperationsManager.deletedVideos)
+        assertTrue(viewModel.playbackQueueManager.queueState.value.items.isEmpty())
+    }
+
+    @Test
+    fun restoreDeletedVideo_callsFileOperationsManager() = runTest {
+        var callbackInvoked = false
+        viewModel.restoreDeletedVideo("v1") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("v1"), fileOperationsManager.restoredVideos)
     }
 
     private fun createSampleVideo(id: String, title: String): Video = Video(

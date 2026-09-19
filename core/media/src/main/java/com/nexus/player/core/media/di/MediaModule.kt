@@ -25,4 +25,10 @@ abstract class MediaModule {
     abstract fun bindThumbnailLoader(
         impl: ThumbnailLoaderImpl
     ): ThumbnailLoader
+
+    @Binds
+    @Singleton
+    abstract fun bindVideoFileOperationsManager(
+        impl: com.nexus.player.core.media.operations.VideoFileOperationsManagerImpl
+    ): com.nexus.player.core.media.operations.VideoFileOperationsManager
 }

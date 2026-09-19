@@ -10,12 +10,14 @@ import com.nexus.player.feature.search.SearchScreen
  */
 fun NavGraphBuilder.searchScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToPlayer: (String) -> Unit
+    onNavigateToPlayer: (String) -> Unit,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> }
 ) {
     composable<SearchRoute> {
         SearchScreen(
             onBackClick = onNavigateBack,
-            onNavigateToPlayer = onNavigateToPlayer
+            onNavigateToPlayer = onNavigateToPlayer,
+            onFolderClick = onFolderClick
         )
     }
 }

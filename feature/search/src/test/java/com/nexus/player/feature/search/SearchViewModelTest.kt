@@ -39,6 +39,7 @@ class SearchViewModelTest {
     private lateinit var fakeRepository: FakeVideoRepository
     private lateinit var fakeQueueManager: PlaybackQueueManagerImpl
     private lateinit var fakeThumbnailLoader: FakeThumbnailLoader
+    private lateinit var fakeFileOperationsManager: FakeVideoFileOperationsManager
     private lateinit var viewModel: SearchViewModel
 
     @Before
@@ -47,11 +48,13 @@ class SearchViewModelTest {
         fakeRepository = FakeVideoRepository()
         fakeQueueManager = PlaybackQueueManagerImpl()
         fakeThumbnailLoader = FakeThumbnailLoader()
+        fakeFileOperationsManager = FakeVideoFileOperationsManager()
 
         viewModel = SearchViewModel(
             videoRepository = fakeRepository,
             playbackQueueManager = fakeQueueManager,
-            thumbnailLoader = fakeThumbnailLoader
+            thumbnailLoader = fakeThumbnailLoader,
+            fileOperationsManager = fakeFileOperationsManager
         )
     }
 
@@ -307,6 +310,144 @@ class SearchViewModelTest {
         assertEquals(2, updated.resultCount)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun toggleFavorite_delegatesToFileOperationsManager() = runTest {
+        val v1 = sampleVideo("1", "Gladiator")
+        fakeRepository.setAllVideos(listOf(v1))
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("Gladiator")
+        advanceTimeBy(250L)
+        advanceUntilIdle()
+
+        val video = (viewModel.uiState.value as SearchUiState.Success).results.first()
+        viewModel.toggleFavorite(video)
+        advanceUntilIdle()
+
+        assertEquals(true, fakeFileOperationsManager.favoriteVideos["1"])
+        collectJob.cancel()
+    }
+
+    @Test
+    fun renameVideo_delegatesToFileOperationsManager() = runTest {
+        val v1 = sampleVideo("1", "Gladiator")
+        fakeRepository.setAllVideos(listOf(v1))
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("Gladiator")
+        advanceTimeBy(250L)
+        advanceUntilIdle()
+
+        val video = (viewModel.uiState.value as SearchUiState.Success).results.first()
+        var callbackInvoked = false
+        viewModel.renameVideo(video, "Gladiator II") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("1" to "Gladiator II", fakeFileOperationsManager.renamedVideos.first())
+        collectJob.cancel()
+    }
+
+    @Test
+    fun moveVideo_delegatesToFileOperationsManager() = runTest {
+        val v1 = sampleVideo("1", "Gladiator")
+        fakeRepository.setAllVideos(listOf(v1))
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("Gladiator")
+        advanceTimeBy(250L)
+        advanceUntilIdle()
+
+        val video = (viewModel.uiState.value as SearchUiState.Success).results.first()
+        var callbackInvoked = false
+        viewModel.moveVideo(video, "/storage/Movies/Action") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("1" to "/storage/Movies/Action", fakeFileOperationsManager.movedVideos.first())
+        collectJob.cancel()
+    }
+
+    @Test
+    fun copyVideo_delegatesToFileOperationsManager() = runTest {
+        val v1 = sampleVideo("1", "Gladiator")
+        fakeRepository.setAllVideos(listOf(v1))
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("Gladiator")
+        advanceTimeBy(250L)
+        advanceUntilIdle()
+
+        val video = (viewModel.uiState.value as SearchUiState.Success).results.first()
+        var callbackInvoked = false
+        viewModel.copyVideo(video, "/storage/Movies/Backup") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("1" to "/storage/Movies/Backup", fakeFileOperationsManager.copiedVideos.first())
+        collectJob.cancel()
+    }
+
+    @Test
+    fun deleteVideo_delegatesToFileOperationsManagerAndRemovesFromQueue() = runTest {
+        val v1 = sampleVideo("1", "Gladiator")
+        fakeRepository.setAllVideos(listOf(v1))
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChange("Gladiator")
+        advanceTimeBy(250L)
+        advanceUntilIdle()
+
+        viewModel.playVideo("1")
+        advanceUntilIdle()
+        assertEquals(listOf("1"), fakeQueueManager.queueState.value.items)
+
+        val video = (viewModel.uiState.value as SearchUiState.Success).results.first()
+        var callbackInvoked = false
+        viewModel.deleteVideo(video) { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("1"), fakeFileOperationsManager.deletedVideos)
+        assertTrue(fakeQueueManager.queueState.value.items.isEmpty())
+        collectJob.cancel()
+    }
+
+    @Test
+    fun restoreDeletedVideo_delegatesToFileOperationsManager() = runTest {
+        var callbackInvoked = false
+        viewModel.restoreDeletedVideo("1") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("1"), fakeFileOperationsManager.restoredVideos)
     }
 
     // --- Test Doubles ---

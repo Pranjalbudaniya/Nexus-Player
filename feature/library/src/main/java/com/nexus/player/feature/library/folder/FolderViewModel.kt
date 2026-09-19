@@ -31,6 +31,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import android.content.Context
+import com.nexus.player.core.media.operations.VideoFileOperationsManager
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class FolderViewModel @Inject constructor(
@@ -38,6 +41,7 @@ class FolderViewModel @Inject constructor(
     private val folderRepository: FolderRepository,
     private val libraryPreferencesRepository: LibraryPreferencesRepository,
     val thumbnailLoader: ThumbnailLoader,
+    val fileOperationsManager: VideoFileOperationsManager,
     @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
     val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl()
 ) : ViewModel() {
@@ -78,6 +82,10 @@ class FolderViewModel @Inject constructor(
         libraryPreferencesRepository.sortOption
     ) { mode, sort -> mode to sort }
 
+    // All available video folders on device for Move / Copy dialogs
+    private val allFoldersFlow = fileOperationsManager.getAvailableFolders()
+        .flowOn(ioDispatcher)
+
     private val dialogFlow = combine(
         _selectedVideoForMenu,
         _isSortSheetVisible
@@ -87,8 +95,9 @@ class FolderViewModel @Inject constructor(
         subfoldersFlow,
         videosFlow,
         preferencesFlow,
-        dialogFlow
-    ) { subfolders, videos, (layoutMode, sortOption), (menuVideo, isSortVisible) ->
+        dialogFlow,
+        allFoldersFlow
+    ) { subfolders, videos, (layoutMode, sortOption), (menuVideo, isSortVisible), allFolders ->
         FolderUiState(
             folderPath = folderPath,
             folderName = folderName,
@@ -98,7 +107,8 @@ class FolderViewModel @Inject constructor(
             sortOption = sortOption,
             isLoading = false,
             selectedVideoForMenu = menuVideo,
-            isSortSheetVisible = isSortVisible
+            isSortSheetVisible = isSortVisible,
+            allFolders = allFolders
         )
     }.stateIn(
         scope = viewModelScope,
@@ -141,5 +151,57 @@ class FolderViewModel @Inject constructor(
             initialVideoId = videoId,
             source = QueueSource.Folder(folderPath = folderPath, folderName = folderName)
         )
+    }
+
+    fun toggleFavorite(video: MediaMetadata) {
+        viewModelScope.launch {
+            fileOperationsManager.setFavorite(video.id, !video.isFavorite)
+        }
+    }
+
+    fun renameVideo(video: MediaMetadata, newName: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.renameVideo(video.id, newName)
+            onResult(result)
+        }
+    }
+
+    fun moveVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.moveVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun copyVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.copyVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun deleteVideo(video: MediaMetadata, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            playbackQueueManager.removeItem(video.id)
+            val result = fileOperationsManager.deleteVideo(video.id, stageForUndo = true)
+            onResult(result)
+        }
+    }
+
+    fun restoreDeletedVideo(videoId: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.restoreDeletedVideo(videoId)
+            onResult(result)
+        }
+    }
+
+    fun purgeStagedDeletions() {
+        viewModelScope.launch {
+            fileOperationsManager.purgeStagedDeletions()
+        }
+    }
+
+    fun shareVideo(context: Context, video: MediaMetadata) {
+        fileOperationsManager.shareVideo(context, video)
     }
 }

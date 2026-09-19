@@ -5,6 +5,13 @@ import com.nexus.player.core.common.storage.StorageAccessRepository
 import com.nexus.player.core.common.storage.StorageAccessState
 import com.nexus.player.core.scanner.model.ScanState
 import com.nexus.player.core.scanner.orchestrator.MediaScanOrchestrator
+import com.nexus.player.core.database.model.SearchFilter
+import com.nexus.player.core.database.model.Video
+import com.nexus.player.core.database.model.VideoFolder
+import com.nexus.player.core.database.model.VideoSortOrder
+import com.nexus.player.core.database.repository.VideoRepository
+import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.media.model.toMediaMetadata
 import com.nexus.player.feature.home.domain.model.ContinueWatchingVideo
 import com.nexus.player.feature.home.domain.model.FavoriteVideo
 import com.nexus.player.feature.home.domain.model.HomeFolder
@@ -20,15 +27,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -45,6 +56,8 @@ class HomeViewModelTest {
     private lateinit var fakeScanOrchestrator: FakeScanOrchestrator
     private lateinit var fakeStorageRepository: FakeStorageRepository
     private lateinit var fakeThumbnailLoader: FakeThumbnailLoader
+    private lateinit var fakeVideoRepository: FakeVideoRepository
+    private lateinit var fakeFileOperationsManager: FakeVideoFileOperationsManager
 
     private lateinit var viewModel: HomeViewModel
 
@@ -59,6 +72,8 @@ class HomeViewModelTest {
         fakeScanOrchestrator = FakeScanOrchestrator()
         fakeStorageRepository = FakeStorageRepository()
         fakeThumbnailLoader = FakeThumbnailLoader()
+        fakeVideoRepository = FakeVideoRepository()
+        fakeFileOperationsManager = FakeVideoFileOperationsManager()
 
         viewModel = HomeViewModel(
             continueWatchingProvider = fakeContinueWatchingProvider,
@@ -68,6 +83,8 @@ class HomeViewModelTest {
             mediaScanOrchestrator = fakeScanOrchestrator,
             storageAccessRepository = fakeStorageRepository,
             thumbnailLoader = fakeThumbnailLoader,
+            videoRepository = fakeVideoRepository,
+            fileOperationsManager = fakeFileOperationsManager,
             ioDispatcher = testDispatcher
         )
     }
@@ -209,12 +226,211 @@ class HomeViewModelTest {
             mediaScanOrchestrator = fakeScanOrchestrator,
             storageAccessRepository = fakeStorageRepository,
             thumbnailLoader = fakeThumbnailLoader,
+            videoRepository = fakeVideoRepository,
+            fileOperationsManager = fakeFileOperationsManager,
             ioDispatcher = testDispatcher
         )
 
         val state = errorViewModel.uiState.first { it is HomeUiState.Error }
         assertTrue(state is HomeUiState.Error)
         assertEquals("Database read error", (state as HomeUiState.Error).message)
+    }
+
+    @Test
+    fun contextMenu_longClickSetsVideoAndDismissClearsIt() = runTest(testDispatcher) {
+        val video = Video(
+            id = "video_123",
+            mediaUri = "content://media/video_123",
+            filePath = "/storage/Movies/Movie.mp4",
+            fileName = "Movie.mp4",
+            title = "Movie Title",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L
+        )
+        fakeVideoRepository.setVideos(listOf(video))
+
+        assertNull(viewModel.selectedVideoForMenu.value)
+
+        viewModel.onVideoLongClick("video_123")
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.selectedVideoForMenu.value)
+        assertEquals("video_123", viewModel.selectedVideoForMenu.value?.id)
+        assertEquals("Movie Title", viewModel.selectedVideoForMenu.value?.title)
+
+        viewModel.dismissContextMenu()
+        assertNull(viewModel.selectedVideoForMenu.value)
+    }
+
+    @Test
+    fun toggleFavorite_delegatesToFileOperationsManager() = runTest(testDispatcher) {
+        val video = Video(
+            id = "fav_video",
+            mediaUri = "content://media/fav_video",
+            filePath = "/storage/Movies/Fav.mp4",
+            fileName = "Fav.mp4",
+            title = "Fav",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L,
+            isFavorite = false
+        )
+        fakeVideoRepository.setVideos(listOf(video))
+
+        viewModel.toggleFavorite(video.toMediaMetadata())
+        advanceUntilIdle()
+
+        assertEquals(true, fakeFileOperationsManager.favoriteVideos["fav_video"])
+    }
+
+    @Test
+    fun renameVideo_delegatesToFileOperationsManager() = runTest(testDispatcher) {
+        val video = Video(
+            id = "ren_video",
+            mediaUri = "content://media/ren_video",
+            filePath = "/storage/Movies/Ren.mp4",
+            fileName = "Ren.mp4",
+            title = "Ren",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L
+        )
+
+        var callbackInvoked = false
+        viewModel.renameVideo(video.toMediaMetadata(), "NewRen") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("ren_video" to "NewRen", fakeFileOperationsManager.renamedVideos.first())
+    }
+
+    @Test
+    fun moveVideo_delegatesToFileOperationsManager() = runTest(testDispatcher) {
+        val video = Video(
+            id = "mv_video",
+            mediaUri = "content://media/mv_video",
+            filePath = "/storage/Movies/Mv.mp4",
+            fileName = "Mv.mp4",
+            title = "Mv",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L
+        )
+
+        var callbackInvoked = false
+        viewModel.moveVideo(video.toMediaMetadata(), "/storage/Movies/Archive") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("mv_video" to "/storage/Movies/Archive", fakeFileOperationsManager.movedVideos.first())
+    }
+
+    @Test
+    fun copyVideo_delegatesToFileOperationsManager() = runTest(testDispatcher) {
+        val video = Video(
+            id = "cp_video",
+            mediaUri = "content://media/cp_video",
+            filePath = "/storage/Movies/Cp.mp4",
+            fileName = "Cp.mp4",
+            title = "Cp",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L
+        )
+
+        var callbackInvoked = false
+        viewModel.copyVideo(video.toMediaMetadata(), "/storage/Movies/Backup") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("cp_video" to "/storage/Movies/Backup", fakeFileOperationsManager.copiedVideos.first())
+    }
+
+    @Test
+    fun deleteVideo_delegatesToFileOperationsManagerAndRemovesFromQueue() = runTest(testDispatcher) {
+        val video = Video(
+            id = "del_video",
+            mediaUri = "content://media/del_video",
+            filePath = "/storage/Movies/Del.mp4",
+            fileName = "Del.mp4",
+            title = "Del",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 60000L,
+            width = 1920,
+            height = 1080,
+            resolutionLabel = "1080p",
+            dateAdded = 1000L,
+            lastModified = 1000L
+        )
+
+        viewModel.playVideo("del_video")
+        assertEquals(listOf("del_video"), viewModel.playbackQueueManager.queueState.value.items)
+
+        var callbackInvoked = false
+        viewModel.deleteVideo(video.toMediaMetadata()) { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("del_video"), fakeFileOperationsManager.deletedVideos)
+        assertTrue(viewModel.playbackQueueManager.queueState.value.items.isEmpty())
+    }
+
+    @Test
+    fun restoreDeletedVideo_delegatesToFileOperationsManager() = runTest(testDispatcher) {
+        var callbackInvoked = false
+        viewModel.restoreDeletedVideo("del_video") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("del_video"), fakeFileOperationsManager.restoredVideos)
     }
 
     // =========================================================================
@@ -284,5 +500,35 @@ class HomeViewModelTest {
         override suspend fun loadThumbnail(mediaUri: String, targetWidth: Int, targetHeight: Int): android.graphics.Bitmap? = null
         override fun clearMemoryCache() {}
         override fun getCachedEntriesCount(): Int = 0
+    }
+
+    private class FakeVideoRepository : VideoRepository {
+        private val _videosFlow = MutableStateFlow<List<Video>>(emptyList())
+
+        fun setVideos(videos: List<Video>) {
+            _videosFlow.value = videos
+        }
+
+        override fun getAllVideos(sortOrder: VideoSortOrder): Flow<List<Video>> = _videosFlow.asStateFlow()
+        override fun getFavoriteVideos(): Flow<List<Video>> = flowOf(emptyList())
+        override fun getRecentlyAddedVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
+        override fun getContinueWatchingVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
+        override fun getHistoryVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
+        override fun getVideosByFolder(folderPath: String): Flow<List<Video>> = flowOf(emptyList())
+        override fun getFolders(): Flow<List<VideoFolder>> = flowOf(emptyList())
+        override suspend fun getVideoById(id: String): Video? = _videosFlow.value.find { it.id == id }
+        override suspend fun getVideoByUri(mediaUri: String): Video? = _videosFlow.value.find { it.mediaUri == mediaUri }
+        override suspend fun getVideosCount(): Int = _videosFlow.value.size
+        override fun searchVideos(query: String): Flow<List<Video>> = flowOf(emptyList())
+        override fun searchVideos(filter: SearchFilter): Flow<List<Video>> = flowOf(emptyList())
+        override suspend fun insertVideo(video: Video): Long = 1L
+        override suspend fun upsertVideo(video: Video) {}
+        override suspend fun upsertVideos(videos: List<Video>) {}
+        override suspend fun updatePlaybackProgress(id: String, positionMs: Long, percentage: Float, lastPlayedAt: Long) {}
+        override suspend fun setFavorite(id: String, isFavorite: Boolean) {}
+        override suspend fun deleteVideo(id: String) {}
+        override suspend fun deleteVideoByUri(mediaUri: String) {}
+        override suspend fun deleteStaleVideos(validIds: List<String>) {}
+        override suspend fun clearAll() {}
     }
 }

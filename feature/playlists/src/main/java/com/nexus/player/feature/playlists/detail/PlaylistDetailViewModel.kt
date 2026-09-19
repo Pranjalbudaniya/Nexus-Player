@@ -16,19 +16,35 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import android.content.Context
+import com.nexus.player.core.database.model.VideoFolder
+import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.media.operations.VideoFileOperationsManager
+import kotlinx.coroutines.flow.asStateFlow
+
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val playlistRepository: PlaylistRepository,
-    val playbackQueueManager: PlaybackQueueManager
+    val playbackQueueManager: PlaybackQueueManager,
+    val fileOperationsManager: VideoFileOperationsManager
 ) : ViewModel() {
 
     val playlistId: String = checkNotNull(savedStateHandle["playlistId"])
+
+    val folders: StateFlow<List<VideoFolder>> = fileOperationsManager
+        .getAvailableFolders()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000L),
+            initialValue = emptyList()
+        )
 
     private val _searchQuery = MutableStateFlow("")
     private val _isRenameDialogOpen = MutableStateFlow(false)
     private val _isDeleteDialogOpen = MutableStateFlow(false)
     private val _errorMessage = MutableStateFlow<String?>(null)
+    private val _selectedVideoForMenu = MutableStateFlow<MediaMetadata?>(null)
 
     // For Undo action
     private var lastRemovedVideoId: String? = null
@@ -51,8 +67,9 @@ class PlaylistDetailViewModel @Inject constructor(
         playlistRepository.observePlaylist(playlistId),
         playlistRepository.observePlaylistVideos(playlistId),
         _searchQuery,
-        dialogFlow
-    ) { playlist, items, query, dialog ->
+        dialogFlow,
+        _selectedVideoForMenu
+    ) { playlist, items, query, dialog, menuVideo ->
         PlaylistDetailUiState(
             playlist = playlist,
             items = items,
@@ -60,7 +77,8 @@ class PlaylistDetailViewModel @Inject constructor(
             isLoading = false,
             isRenameDialogOpen = dialog.isRenameOpen,
             isDeleteDialogOpen = dialog.isDeleteOpen,
-            errorMessage = dialog.error
+            errorMessage = dialog.error,
+            selectedVideoForMenu = menuVideo
         )
     }.stateIn(
         scope = viewModelScope,
@@ -178,5 +196,65 @@ class PlaylistDetailViewModel @Inject constructor(
             _isDeleteDialogOpen.value = false
             onDeleted()
         }
+    }
+
+    fun onVideoLongClick(video: MediaMetadata) {
+        _selectedVideoForMenu.value = video
+    }
+
+    fun dismissContextMenu() {
+        _selectedVideoForMenu.value = null
+    }
+
+    fun toggleFavorite(video: MediaMetadata) {
+        viewModelScope.launch {
+            fileOperationsManager.setFavorite(video.id, !video.isFavorite)
+        }
+    }
+
+    fun renameVideo(video: MediaMetadata, newName: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.renameVideo(video.id, newName)
+            onResult(result)
+        }
+    }
+
+    fun moveVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.moveVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun copyVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.copyVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun deleteVideo(video: MediaMetadata, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            playbackQueueManager.removeItem(video.id)
+            val result = fileOperationsManager.deleteVideo(video.id, stageForUndo = true)
+            onResult(result)
+        }
+    }
+
+    fun restoreDeletedVideo(videoId: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.restoreDeletedVideo(videoId)
+            onResult(result)
+        }
+    }
+
+    fun purgeStagedDeletions() {
+        viewModelScope.launch {
+            fileOperationsManager.purgeStagedDeletions()
+        }
+    }
+
+    fun shareVideo(context: Context, video: MediaMetadata) {
+        fileOperationsManager.shareVideo(context, video)
     }
 }

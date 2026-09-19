@@ -2,6 +2,7 @@ package com.nexus.player.feature.playlists.detail
 
 import com.nexus.player.core.database.model.Playlist
 import com.nexus.player.core.database.model.PlaylistItem
+import com.nexus.player.core.media.model.MediaMetadata
 
 data class PlaylistDetailUiState(
     val playlist: Playlist? = null,
@@ -10,7 +11,8 @@ data class PlaylistDetailUiState(
     val isLoading: Boolean = true,
     val isRenameDialogOpen: Boolean = false,
     val isDeleteDialogOpen: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val selectedVideoForMenu: MediaMetadata? = null
 ) {
     val filteredItems: List<PlaylistItem>
         get() = if (searchQuery.isBlank()) {

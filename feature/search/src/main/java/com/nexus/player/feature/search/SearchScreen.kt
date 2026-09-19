@@ -27,18 +27,36 @@ import com.nexus.player.feature.search.component.SearchTopBar
 /**
  * Global Search Screen for Nexus Player.
  */
+import android.content.Context
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.nexus.player.core.database.model.VideoFolder
+import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import kotlinx.coroutines.launch
+import java.io.File
+
 @Composable
 fun SearchScreen(
     onBackClick: () -> Unit,
     onNavigateToPlayer: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     var videoForAddToPlaylist by remember { mutableStateOf<MediaMetadata?>(null) }
 
     SearchScreenContent(
         uiState = uiState,
+        folders = folders,
         onBackClick = onBackClick,
         onQueryChange = viewModel::onSearchQueryChange,
         onClearQuery = viewModel::clearSearchQuery,
@@ -55,6 +73,71 @@ fun SearchScreen(
         onAddToPlaylist = { video ->
             videoForAddToPlaylist = video
         },
+        onToggleFavorite = viewModel::toggleFavorite,
+        onShare = { video -> viewModel.shareVideo(context, video) },
+        onOpenContainingFolder = onFolderClick,
+        onRenameConfirm = { video, newName ->
+            viewModel.renameVideo(video, newName) { result ->
+                scope.launch {
+                    result.onSuccess { renamed ->
+                        snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onMoveConfirm = { video, targetPath ->
+            viewModel.moveVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Moved to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onCopyConfirm = { video, targetPath ->
+            viewModel.copyVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Copied to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onDeleteConfirm = { video ->
+            viewModel.deleteVideo(video) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val snackbarResult = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${video.title}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (snackbarResult == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreDeletedVideo(video.id) { restoreResult ->
+                                if (restoreResult.isFailure) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                    }
+                                }
+                            }
+                        } else {
+                            viewModel.purgeStagedDeletions()
+                        }
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        snackbarHostState = snackbarHostState,
         thumbnailLoader = viewModel.thumbnailLoader,
         modifier = modifier
     )
@@ -71,6 +154,7 @@ fun SearchScreen(
 @Composable
 fun SearchScreenContent(
     uiState: SearchUiState,
+    folders: List<VideoFolder>,
     onBackClick: () -> Unit,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
@@ -80,12 +164,21 @@ fun SearchScreenContent(
     onVideoLongClick: (MediaMetadata) -> Unit,
     onDismissContextMenu: () -> Unit,
     onAddToPlaylist: (MediaMetadata) -> Unit,
+    onToggleFavorite: (MediaMetadata) -> Unit = {},
+    onShare: (MediaMetadata) -> Unit = {},
+    onOpenContainingFolder: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
+    onRenameConfirm: (video: MediaMetadata, newName: String) -> Unit = { _, _ -> },
+    onMoveConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
+    onCopyConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
+    onDeleteConfirm: (video: MediaMetadata) -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     thumbnailLoader: com.nexus.player.core.media.thumbnail.ThumbnailLoader,
     modifier: Modifier = Modifier
 ) {
     NexusScaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             SearchTopBar(
                 query = uiState.query,
@@ -144,15 +237,21 @@ fun SearchScreenContent(
             }
         }
 
-        // Long-Press Context Menu
-        val selectedVideo = uiState.selectedVideoForMenu
-        if (selectedVideo != null) {
-            LibraryContextMenuSheet(
-                video = selectedVideo,
-                onPlay = onVideoClick,
-                onDismissRequest = onDismissContextMenu,
-                onAddToPlaylist = onAddToPlaylist
-            )
-        }
+        // Long-Press Context Menu & Dialogs
+        VideoActionHost(
+            video = uiState.selectedVideoForMenu,
+            isSheetVisible = uiState.selectedVideoForMenu != null,
+            folders = folders,
+            onDismissSheet = onDismissContextMenu,
+            onPlay = onVideoClick,
+            onAddToPlaylist = onAddToPlaylist,
+            onToggleFavorite = onToggleFavorite,
+            onShare = onShare,
+            onOpenContainingFolder = onOpenContainingFolder,
+            onRenameConfirm = onRenameConfirm,
+            onMoveConfirm = onMoveConfirm,
+            onCopyConfirm = onCopyConfirm,
+            onDeleteConfirm = onDeleteConfirm
+        )
     }
 }

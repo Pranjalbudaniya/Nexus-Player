@@ -51,6 +51,19 @@ import com.nexus.player.core.ui.component.VerticalSpacer
 import com.nexus.player.feature.home.component.HomeSection
 import com.nexus.player.feature.home.component.HomeThumbnail
 
+import android.content.Context
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.nexus.player.core.database.model.VideoFolder
+import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import kotlinx.coroutines.launch
+import java.io.File
+
 @Composable
 fun HomeRoute(
     onNavigateToSettings: () -> Unit = {},
@@ -61,17 +74,90 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedVideoForMenu by viewModel.selectedVideoForMenu.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     HomeScreen(
         uiState = uiState,
         thumbnailLoader = viewModel.thumbnailLoader,
+        selectedVideoForMenu = selectedVideoForMenu,
+        folders = folders,
         onNavigateToSettings = onNavigateToSettings,
         onNavigateToSearch = onNavigateToSearch,
         onVideoClick = { videoId ->
             viewModel.playVideo(videoId)
             onVideoClick(videoId)
         },
+        onVideoLongClick = viewModel::onVideoLongClick,
+        onDismissContextMenu = viewModel::dismissContextMenu,
         onFolderClick = onFolderClick,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onShare = { video -> viewModel.shareVideo(context, video) },
+        onRenameConfirm = { video, newName ->
+            viewModel.renameVideo(video, newName) { result ->
+                scope.launch {
+                    result.onSuccess { renamed ->
+                        snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onMoveConfirm = { video, targetPath ->
+            viewModel.moveVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Moved to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onCopyConfirm = { video, targetPath ->
+            viewModel.copyVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Copied to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onDeleteConfirm = { video ->
+            viewModel.deleteVideo(video) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val snackbarResult = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${video.title}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (snackbarResult == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreDeletedVideo(video.id) { restoreResult ->
+                                if (restoreResult.isFailure) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                    }
+                                }
+                            }
+                        } else {
+                            viewModel.purgeStagedDeletions()
+                        }
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        snackbarHostState = snackbarHostState,
         modifier = modifier
     )
 }
@@ -81,10 +167,21 @@ fun HomeRoute(
 fun HomeScreen(
     uiState: HomeUiState,
     thumbnailLoader: ThumbnailLoader? = null,
+    selectedVideoForMenu: MediaMetadata? = null,
+    folders: List<VideoFolder> = emptyList(),
     onNavigateToSettings: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onVideoClick: (String) -> Unit = {},
+    onVideoLongClick: (String) -> Unit = {},
+    onDismissContextMenu: () -> Unit = {},
     onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
+    onToggleFavorite: (MediaMetadata) -> Unit = {},
+    onShare: (MediaMetadata) -> Unit = {},
+    onRenameConfirm: (video: MediaMetadata, newName: String) -> Unit = { _, _ -> },
+    onMoveConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
+    onCopyConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
+    onDeleteConfirm: (video: MediaMetadata) -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
@@ -92,6 +189,7 @@ fun HomeScreen(
 
     NexusScaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             NexusTopAppBar(
                 title = "Nexus Player",
@@ -279,7 +377,7 @@ fun HomeScreen(
                                         }
                                     } else null,
                                     onClick = { onVideoClick(item.id) },
-                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
+                                    onLongClick = { onVideoLongClick(item.id) }
                                 )
                             }
                         }
@@ -311,7 +409,7 @@ fun HomeScreen(
                                         }
                                     } else null,
                                     onClick = { onVideoClick(item.id) },
-                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
+                                    onLongClick = { onVideoLongClick(item.id) }
                                 )
                             }
                         }
@@ -341,7 +439,7 @@ fun HomeScreen(
                                         }
                                     } else null,
                                     onClick = { onVideoClick(item.id) },
-                                    onLongClick = { videoForAddToPlaylist = item.id to item.title }
+                                    onLongClick = { onVideoLongClick(item.id) }
                                 )
                             }
                         }
@@ -378,6 +476,22 @@ fun HomeScreen(
             }
         }
     }
+
+    VideoActionHost(
+        video = selectedVideoForMenu,
+        isSheetVisible = selectedVideoForMenu != null,
+        folders = folders,
+        onDismissSheet = onDismissContextMenu,
+        onPlay = onVideoClick,
+        onAddToPlaylist = { video -> videoForAddToPlaylist = video.id to video.title },
+        onToggleFavorite = onToggleFavorite,
+        onShare = onShare,
+        onOpenContainingFolder = onFolderClick,
+        onRenameConfirm = onRenameConfirm,
+        onMoveConfirm = onMoveConfirm,
+        onCopyConfirm = onCopyConfirm,
+        onDeleteConfirm = onDeleteConfirm
+    )
 
     if (videoForAddToPlaylist != null) {
         AddToPlaylistBottomSheet(

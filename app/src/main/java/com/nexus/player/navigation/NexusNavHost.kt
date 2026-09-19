@@ -113,6 +113,9 @@ fun NexusNavHost(
             },
             onNavigateToLibrary = {
                 navController.navigate(LibraryRoute)
+            },
+            onFolderClick = { folderPath, folderName ->
+                navController.navigate(FolderRoute(folderPath, folderName))
             }
         )
 
@@ -151,6 +154,9 @@ fun NexusNavHost(
             },
             onNavigateToPlayer = { videoId ->
                 navController.navigate(PlayerRoute(videoId))
+            },
+            onFolderClick = { folderPath, folderName ->
+                navController.navigate(FolderRoute(folderPath, folderName))
             }
         )
     }

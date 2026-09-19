@@ -36,6 +36,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import android.content.Context
+import com.nexus.player.core.media.operations.VideoFileOperationsManager
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -45,6 +48,7 @@ class LibraryViewModel @Inject constructor(
     private val storageAccessRepository: StorageAccessRepository,
     private val libraryPreferencesRepository: LibraryPreferencesRepository,
     val thumbnailLoader: ThumbnailLoader,
+    val fileOperationsManager: VideoFileOperationsManager,
     @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
     val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl()
 ) : ViewModel() {
@@ -221,6 +225,58 @@ class LibraryViewModel @Inject constructor(
             initialVideoId = videoId,
             source = QueueSource.Library
         )
+    }
+
+    fun toggleFavorite(video: MediaMetadata) {
+        viewModelScope.launch {
+            fileOperationsManager.setFavorite(video.id, !video.isFavorite)
+        }
+    }
+
+    fun renameVideo(video: MediaMetadata, newName: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.renameVideo(video.id, newName)
+            onResult(result)
+        }
+    }
+
+    fun moveVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.moveVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun copyVideo(video: MediaMetadata, targetFolderPath: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.copyVideo(video.id, targetFolderPath)
+            onResult(result)
+        }
+    }
+
+    fun deleteVideo(video: MediaMetadata, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            playbackQueueManager.removeItem(video.id)
+            val result = fileOperationsManager.deleteVideo(video.id, stageForUndo = true)
+            onResult(result)
+        }
+    }
+
+    fun restoreDeletedVideo(videoId: String, onResult: (Result<MediaMetadata>) -> Unit) {
+        viewModelScope.launch {
+            val result = fileOperationsManager.restoreDeletedVideo(videoId)
+            onResult(result)
+        }
+    }
+
+    fun purgeStagedDeletions() {
+        viewModelScope.launch {
+            fileOperationsManager.purgeStagedDeletions()
+        }
+    }
+
+    fun shareVideo(context: Context, video: MediaMetadata) {
+        fileOperationsManager.shareVideo(context, video)
     }
 
     private data class LibraryPreferencesSnapshot(

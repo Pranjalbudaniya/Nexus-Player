@@ -17,7 +17,8 @@ data class FolderUiState(
     val sortOption: LibrarySortOption = LibrarySortOption(),
     val isLoading: Boolean = true,
     val selectedVideoForMenu: MediaMetadata? = null,
-    val isSortSheetVisible: Boolean = false
+    val isSortSheetVisible: Boolean = false,
+    val allFolders: List<VideoFolder> = emptyList()
 ) {
     val isEmpty: Boolean
         get() = !isLoading && subfolders.isEmpty() && videos.isEmpty()

@@ -3,7 +3,9 @@ package com.nexus.player.feature.playlists.detail
 import androidx.lifecycle.SavedStateHandle
 import com.nexus.player.core.playback.queue.PlaybackQueueManagerImpl
 import com.nexus.player.core.playback.queue.QueueSource
+import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.feature.playlists.FakePlaylistRepository
+import com.nexus.player.feature.playlists.FakeVideoFileOperationsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
@@ -17,6 +19,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -27,6 +30,7 @@ class PlaylistDetailViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var fakeRepository: FakePlaylistRepository
     private lateinit var fakeQueueManager: PlaybackQueueManagerImpl
+    private lateinit var fakeFileOperationsManager: FakeVideoFileOperationsManager
     private lateinit var viewModel: PlaylistDetailViewModel
     private val testPlaylistId = "pl_detail_1"
 
@@ -35,6 +39,7 @@ class PlaylistDetailViewModelTest {
         Dispatchers.setMain(testDispatcher)
         fakeRepository = FakePlaylistRepository()
         fakeQueueManager = PlaybackQueueManagerImpl()
+        fakeFileOperationsManager = FakeVideoFileOperationsManager()
 
         // Create initial playlist and add items
         fakeRepository.createPlaylist("Favorites")
@@ -46,7 +51,8 @@ class PlaylistDetailViewModelTest {
         viewModel = PlaylistDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("playlistId" to playlist.id)),
             playlistRepository = fakeRepository,
-            playbackQueueManager = fakeQueueManager
+            playbackQueueManager = fakeQueueManager,
+            fileOperationsManager = fakeFileOperationsManager
         )
     }
 
@@ -156,5 +162,306 @@ class PlaylistDetailViewModelTest {
         assertEquals(listOf("vid_2", "vid_3", "vid_1"), viewModel.uiState.value.playableVideoIds)
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun contextMenu_selectsAndDismissesVideo() = runTest {
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        assertNull(viewModel.uiState.value.selectedVideoForMenu)
+
+        viewModel.onVideoLongClick(sampleMetadata)
+        advanceUntilIdle()
+
+        assertEquals(sampleMetadata, viewModel.uiState.value.selectedVideoForMenu)
+
+        viewModel.dismissContextMenu()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.selectedVideoForMenu)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun toggleFavorite_delegatesToFileOperationsManager() = runTest {
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        viewModel.toggleFavorite(sampleMetadata)
+        advanceUntilIdle()
+
+        assertEquals(true, fakeFileOperationsManager.favoriteVideos["vid_1"])
+    }
+
+    @Test
+    fun renameVideo_delegatesToFileOperationsManager() = runTest {
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        var callbackInvoked = false
+        viewModel.renameVideo(sampleMetadata, "NewVid") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("vid_1" to "NewVid", fakeFileOperationsManager.renamedVideos.first())
+    }
+
+    @Test
+    fun moveVideo_delegatesToFileOperationsManager() = runTest {
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        var callbackInvoked = false
+        viewModel.moveVideo(sampleMetadata, "/Movies/Archive") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("vid_1" to "/Movies/Archive", fakeFileOperationsManager.movedVideos.first())
+    }
+
+    @Test
+    fun copyVideo_delegatesToFileOperationsManager() = runTest {
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        var callbackInvoked = false
+        viewModel.copyVideo(sampleMetadata, "/Movies/Backup") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals("vid_1" to "/Movies/Backup", fakeFileOperationsManager.copiedVideos.first())
+    }
+
+    @Test
+    fun deleteVideo_delegatesToFileOperationsManagerAndRemovesFromQueue() = runTest {
+        val sampleMetadata = MediaMetadata(
+            id = "vid_1",
+            mediaUri = "file:///Movies/vid_1.mp4",
+            filePath = "/Movies/vid_1.mp4",
+            fileName = "vid_1.mp4",
+            title = "vid_1",
+            folderName = "Movies",
+            folderPath = "/Movies",
+            formattedDuration = "01:00",
+            durationMs = 60000L,
+            resolutionLabel = "1080p",
+            dimensionsLabel = "1920x1080",
+            width = 1920,
+            height = 1080,
+            videoCodec = "H264",
+            audioCodec = "AAC",
+            formattedFps = "30 fps",
+            frameRate = 30f,
+            formattedBitrate = "2 Mbps",
+            videoBitrate = 2000000L,
+            formattedSize = "10 MB",
+            sizeBytes = 10000000L,
+            formattedModifiedDate = "Today",
+            lastModified = 1000L,
+            audioTrackCount = 1,
+            subtitleTrackCount = 0,
+            isFavorite = false,
+            playbackPositionMs = 0L,
+            playbackPercentage = 0f,
+            watchCount = 0,
+            lastPlayedAt = null
+        )
+
+        val collectJob = launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.playAll {}
+        advanceUntilIdle()
+        assertEquals(3, fakeQueueManager.queueState.value.size)
+
+        var callbackInvoked = false
+        viewModel.deleteVideo(sampleMetadata) { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("vid_1"), fakeFileOperationsManager.deletedVideos)
+        assertEquals(2, fakeQueueManager.queueState.value.size)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun restoreDeletedVideo_delegatesToFileOperationsManager() = runTest {
+        var callbackInvoked = false
+        viewModel.restoreDeletedVideo("vid_1") { result ->
+            callbackInvoked = true
+            assertTrue(result.isSuccess)
+        }
+        advanceUntilIdle()
+
+        assertTrue(callbackInvoked)
+        assertEquals(listOf("vid_1"), fakeFileOperationsManager.restoredVideos)
     }
 }

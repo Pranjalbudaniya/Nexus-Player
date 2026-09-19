@@ -52,31 +52,112 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.designsystem.theme.NexusTheme
+import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.media.model.toMediaMetadata
+import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 import com.nexus.player.feature.playlists.component.DeletePlaylistConfirmationDialog
 import com.nexus.player.feature.playlists.component.RenamePlaylistDialog
+import java.io.File
 import kotlinx.coroutines.launch
 
 @Composable
-fun PlaylistDetailScreen(
+fun PlaylistDetailRoute(
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: (String) -> Unit,
     onNavigateToLibrary: () -> Unit,
     modifier: Modifier = Modifier,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var videoForAddToPlaylist by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     PlaylistDetailContent(
         uiState = uiState,
+        folders = folders,
         onNavigateBack = onNavigateBack,
         onPlayAll = { viewModel.playAll(onNavigateToPlayer) },
         onShufflePlay = { viewModel.shufflePlay(onNavigateToPlayer) },
         onPlayVideo = { videoId -> viewModel.playVideo(videoId, onNavigateToPlayer) },
+        onVideoLongClick = viewModel::onVideoLongClick,
+        onDismissContextMenu = viewModel::dismissContextMenu,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onShare = { video -> viewModel.shareVideo(context, video) },
+        onOpenContainingFolder = onFolderClick,
+        onRenameConfirm = { video, newName ->
+            viewModel.renameVideo(video, newName) { result ->
+                scope.launch {
+                    result.onSuccess { renamed ->
+                        snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onMoveConfirm = { video, targetPath ->
+            viewModel.moveVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Moved to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onCopyConfirm = { video, targetPath ->
+            viewModel.copyVideo(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Copied to $folderName")
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onDeleteConfirm = { video ->
+            viewModel.deleteVideo(video) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val snackbarResult = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${video.title}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (snackbarResult == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreDeletedVideo(video.id) { restoreResult ->
+                                if (restoreResult.isFailure) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                    }
+                                }
+                            }
+                        } else {
+                            viewModel.purgeStagedDeletions()
+                        }
+                    }.onFailure { error ->
+                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                    }
+                }
+            }
+        },
+        onAddToPlaylist = { video ->
+            videoForAddToPlaylist = video.id to video.title
+        },
         onRemoveVideo = { videoId, title ->
             viewModel.removeVideo(videoId)
             scope.launch {
@@ -106,12 +187,21 @@ fun PlaylistDetailScreen(
         snackbarHostState = snackbarHostState,
         modifier = modifier
     )
+
+    if (videoForAddToPlaylist != null) {
+        AddToPlaylistBottomSheet(
+            videoId = videoForAddToPlaylist!!.first,
+            videoTitle = videoForAddToPlaylist!!.second,
+            onDismissRequest = { videoForAddToPlaylist = null }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailContent(
     uiState: PlaylistDetailUiState,
+    folders: List<VideoFolder>,
     onNavigateBack: () -> Unit,
     onPlayAll: () -> Unit,
     onShufflePlay: () -> Unit,
@@ -126,6 +216,16 @@ fun PlaylistDetailContent(
     onCloseDeleteDialog: () -> Unit,
     onDeletePlaylist: () -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onVideoLongClick: (MediaMetadata) -> Unit,
+    onDismissContextMenu: () -> Unit,
+    onToggleFavorite: (MediaMetadata) -> Unit,
+    onShare: (MediaMetadata) -> Unit,
+    onOpenContainingFolder: (folderPath: String, folderName: String) -> Unit,
+    onRenameConfirm: (video: MediaMetadata, newName: String) -> Unit,
+    onMoveConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit,
+    onCopyConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit,
+    onDeleteConfirm: (video: MediaMetadata) -> Unit,
+    onAddToPlaylist: (MediaMetadata) -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
@@ -378,6 +478,9 @@ fun PlaylistDetailContent(
                                 index = index,
                                 totalCount = items.size,
                                 onClick = { onPlayVideo(item.videoId) },
+                                onLongClick = {
+                                    item.video?.toMediaMetadata()?.let(onVideoLongClick)
+                                },
                                 onRemoveClick = {
                                     onRemoveVideo(item.videoId, item.video?.title ?: item.videoId)
                                 },
@@ -408,5 +511,22 @@ fun PlaylistDetailContent(
         playlist = if (uiState.isDeleteDialogOpen) playlist else null,
         onDismiss = onCloseDeleteDialog,
         onConfirm = onDeletePlaylist
+    )
+
+    // Video Context Menu & Dialogs
+    VideoActionHost(
+        video = uiState.selectedVideoForMenu,
+        isSheetVisible = uiState.selectedVideoForMenu != null,
+        folders = folders,
+        onDismissSheet = onDismissContextMenu,
+        onPlay = onPlayVideo,
+        onAddToPlaylist = onAddToPlaylist,
+        onToggleFavorite = onToggleFavorite,
+        onShare = onShare,
+        onOpenContainingFolder = onOpenContainingFolder,
+        onRenameConfirm = onRenameConfirm,
+        onMoveConfirm = onMoveConfirm,
+        onCopyConfirm = onCopyConfirm,
+        onDeleteConfirm = onDeleteConfirm
     )
 }

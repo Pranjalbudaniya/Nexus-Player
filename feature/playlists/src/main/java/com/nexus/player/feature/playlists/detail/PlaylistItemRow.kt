@@ -41,6 +41,10 @@ import androidx.compose.ui.unit.dp
 import com.nexus.player.core.database.model.PlaylistItem
 import com.nexus.player.core.designsystem.theme.NexusTheme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlaylistItemRow(
     item: PlaylistItem,
@@ -50,7 +54,8 @@ fun PlaylistItemRow(
     onRemoveClick: () -> Unit,
     onMoveUpClick: () -> Unit,
     onMoveDownClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null
 ) {
     val spacing = NexusTheme.spacing
     val shapes = NexusTheme.customShapes
@@ -64,10 +69,11 @@ fun PlaylistItemRow(
             .fillMaxWidth()
             .clip(shapes.thumbnail)
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable(
+            .combinedClickable(
                 enabled = isAvailable,
                 role = Role.Button,
-                onClick = onClick
+                onClick = onClick,
+                onLongClick = onLongClick
             )
             .padding(horizontal = spacing.medium, vertical = spacing.small)
             .then(if (!isAvailable) Modifier.alpha(0.6f) else Modifier),

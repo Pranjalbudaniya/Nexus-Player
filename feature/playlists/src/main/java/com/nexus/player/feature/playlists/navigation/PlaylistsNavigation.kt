@@ -7,7 +7,7 @@ import androidx.navigation.compose.composable
 import com.nexus.player.core.navigation.PlaylistDetailsRoute
 import com.nexus.player.core.navigation.PlaylistsRoute
 import com.nexus.player.feature.playlists.PlaylistsScreen
-import com.nexus.player.feature.playlists.detail.PlaylistDetailScreen
+import com.nexus.player.feature.playlists.detail.PlaylistDetailRoute
 
 fun NavController.navigateToPlaylists(navOptions: NavOptions? = null) {
     navigate(PlaylistsRoute, navOptions)
@@ -30,13 +30,15 @@ fun NavGraphBuilder.playlistsScreen(
 fun NavGraphBuilder.playlistDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: (String) -> Unit,
-    onNavigateToLibrary: () -> Unit
+    onNavigateToLibrary: () -> Unit,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> }
 ) {
     composable<PlaylistDetailsRoute> {
-        PlaylistDetailScreen(
+        PlaylistDetailRoute(
             onNavigateBack = onNavigateBack,
             onNavigateToPlayer = onNavigateToPlayer,
-            onNavigateToLibrary = onNavigateToLibrary
+            onNavigateToLibrary = onNavigateToLibrary,
+            onFolderClick = onFolderClick
         )
     }
 }
