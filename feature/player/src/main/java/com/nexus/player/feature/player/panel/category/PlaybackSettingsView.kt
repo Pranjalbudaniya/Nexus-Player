@@ -47,6 +47,10 @@ fun PlaybackSettingsView(
     onSeekDurationSelected: (Int) -> Unit = {},
     isAutoNextEnabled: Boolean = false,
     onAutoNextToggled: (Boolean) -> Unit = {},
+    sleepTimerRemainingSeconds: Long? = null,
+    onSetSleepTimerMinutes: (Int) -> Unit = {},
+    onCancelSleepTimer: () -> Unit = {},
+    onOpenSleepTimerDialog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -221,29 +225,71 @@ fun PlaybackSettingsView(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
 
-        Text(
-            text = "Sleep Timer",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = NexusTheme.spacing.small),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Sleep Timer",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            if (sleepTimerRemainingSeconds != null && sleepTimerRemainingSeconds > 0) {
+                val mins = sleepTimerRemainingSeconds / 60
+                val secs = sleepTimerRemainingSeconds % 60
+                Text(
+                    text = String.format("%02d:%02d left", mins, secs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
+            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
         ) {
-            listOf("Off", "15m", "30m", "45m", "60m").forEach { time ->
+            FilterChip(
+                selected = sleepTimerRemainingSeconds == null,
+                onClick = onCancelSleepTimer,
+                label = { Text("Off", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("panel_sleep_timer_off")
+            )
+            listOf(15 to "15m", 30 to "30m", 60 to "60m").forEach { (mins, label) ->
                 FilterChip(
-                    selected = time == "Off",
-                    onClick = {},
-                    label = { Text(time, style = MaterialTheme.typography.labelSmall) },
+                    selected = false,
+                    onClick = { onSetSleepTimerMinutes(mins) },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("panel_sleep_timer_${mins}m")
                 )
             }
+            FilterChip(
+                selected = false,
+                onClick = onOpenSleepTimerDialog,
+                label = { Text("Custom", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                modifier = Modifier
+                    .weight(1.2f)
+                    .testTag("panel_sleep_timer_custom")
+            )
         }
 
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))

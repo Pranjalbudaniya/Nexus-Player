@@ -40,6 +40,8 @@ import com.nexus.player.feature.player.component.PlayerGestureHud
 import com.nexus.player.feature.player.component.PlayerGestureSurface
 import com.nexus.player.feature.player.component.PlayerLoadingOverlay
 import com.nexus.player.feature.player.component.PlayerVideoSurface
+import com.nexus.player.feature.player.dialog.EqualizerDialog
+import com.nexus.player.feature.player.dialog.SleepTimerDialog
 import com.nexus.player.feature.player.orientation.rememberPlayerOrientationController
 import com.nexus.player.feature.player.panel.PlayerPanelState
 import com.nexus.player.feature.player.panel.rememberPlayerPanelState
@@ -51,7 +53,11 @@ import kotlin.math.roundToInt
  * Implements:
  * - VLC-style direct player actions and controls
  * - Isolated gesture surface with volume, brightness, seek, and boost gestures
- * - Visual gesture HUD feedback overlays
+ * - Visual gesture HUD feedback overlays (Volume, Brightness, Seek, Speed Boost, Screenshot, Sleep Timer, Audio Boost)
+ * - Screen brightness restoration on exit
+ * - Real audio boost (100% - 200%) and Equalizer foundation dialog
+ * - Screenshot capture frame saved to Pictures/NexusPlayer
+ * - Sleep timer with countdown, auto-pause, and visual badge
  * - Combined Audio & Subtitles bottom sheet with sync delays
  * - One-tap video aspect ratio cycling (Fit, Fill, Crop, Stretch, Original)
  * - Orientation lock and fullscreen management with auto-rotation fix
@@ -82,6 +88,8 @@ fun PlayerRoute(
     val isAutoNextEnabled by viewModel.isAutoNextEnabled.collectAsStateWithLifecycle()
 
     var showAudioSubtitlesSheet by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showEqualizerDialog by remember { mutableStateOf(false) }
     var hudState by remember { mutableStateOf<GestureHudState>(GestureHudState.None) }
 
     // Listen to one-off player events
@@ -90,6 +98,15 @@ fun PlayerRoute(
             when (event) {
                 is PlayerEvent.VideoCompleted -> {
                     // Completion recorded; ready for auto-next if enabled
+                }
+                is PlayerEvent.ScreenshotSaved -> {
+                    hudState = GestureHudState.Screenshot(success = true)
+                }
+                is PlayerEvent.ScreenshotFailed -> {
+                    hudState = GestureHudState.Screenshot(success = false, message = event.error)
+                }
+                is PlayerEvent.SleepTimerCompleted -> {
+                    hudState = GestureHudState.SleepTimer("Sleep timer finished")
                 }
             }
         }
@@ -110,6 +127,21 @@ fun PlayerRoute(
     var currentBrightness by remember {
         val current = activity?.window?.attributes?.screenBrightness ?: -1f
         mutableFloatStateOf(if (current in 0f..1f) current else 0.5f)
+    }
+
+    val initialScreenBrightness = remember(activity) {
+        activity?.window?.attributes?.screenBrightness ?: -1f
+    }
+
+    // Restore screen brightness on exit
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.window?.let { win ->
+                val lp = win.attributes
+                lp.screenBrightness = initialScreenBrightness
+                win.attributes = lp
+            }
+        }
     }
 
     val subtitlePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -135,7 +167,13 @@ fun PlayerRoute(
     // Auto-dismiss HUD
     LaunchedEffect(hudState) {
         if (hudState !is GestureHudState.None && hudState !is GestureHudState.SpeedBoost) {
-            kotlinx.coroutines.delay(1000L)
+            val durationMs = when (hudState) {
+                is GestureHudState.Screenshot,
+                is GestureHudState.SleepTimer,
+                is GestureHudState.AudioBoost -> 1500L
+                else -> 1000L
+            }
+            kotlinx.coroutines.delay(durationMs)
             hudState = GestureHudState.None
         }
     }
@@ -146,13 +184,20 @@ fun PlayerRoute(
         viewModel.setFullscreen(true)
     }
 
-    // Intercept back button when audio/subtitles sheet is open
-    BackHandler(enabled = showAudioSubtitlesSheet) {
+    // Intercept back button when dialogs/panels are open
+    BackHandler(enabled = showSleepTimerDialog) {
+        showSleepTimerDialog = false
+    }
+
+    BackHandler(enabled = showEqualizerDialog && !showSleepTimerDialog) {
+        showEqualizerDialog = false
+    }
+
+    BackHandler(enabled = showAudioSubtitlesSheet && !showSleepTimerDialog && !showEqualizerDialog) {
         showAudioSubtitlesSheet = false
     }
 
-    // Intercept back button when panel is open
-    BackHandler(enabled = panelState.isOpen && !showAudioSubtitlesSheet) {
+    BackHandler(enabled = panelState.isOpen && !showAudioSubtitlesSheet && !showSleepTimerDialog && !showEqualizerDialog) {
         if (!panelState.navigateBack()) {
             panelState.close()
             viewModel.setPanelOpen(false)
@@ -188,7 +233,11 @@ fun PlayerRoute(
     }
 
     val handleBackClick: () -> Unit = {
-        if (showAudioSubtitlesSheet) {
+        if (showSleepTimerDialog) {
+            showSleepTimerDialog = false
+        } else if (showEqualizerDialog) {
+            showEqualizerDialog = false
+        } else if (showAudioSubtitlesSheet) {
             showAudioSubtitlesSheet = false
         } else if (panelState.isOpen) {
             panelState.close()
@@ -208,6 +257,7 @@ fun PlayerRoute(
             win.attributes = lp
         }
         val percent = (newBrightness * 100).toInt()
+        viewModel.setBrightnessPercent(percent)
         hudState = GestureHudState.Brightness(percent)
     }
 
@@ -217,6 +267,7 @@ fun PlayerRoute(
         val volInt = newVol.roundToInt()
         audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, volInt, 0)
         val percent = if (maxVolume > 0) ((newVol / maxVolume) * 100).toInt() else 0
+        viewModel.setVolumePercent(percent)
         hudState = GestureHudState.Volume(percent)
     }
 
@@ -233,6 +284,25 @@ fun PlayerRoute(
     val onSpeedBoost: (Boolean) -> Unit = { boosting ->
         val boostSpeed = viewModel.setTemporarySpeedBoost(boosting)
         hudState = if (boosting) GestureHudState.SpeedBoost(boostSpeed) else GestureHudState.None
+    }
+
+    val onAudioBoostSelected: (Int) -> Unit = { boostPercent ->
+        viewModel.setAudioBoost(boostPercent)
+        hudState = GestureHudState.AudioBoost(boostPercent)
+    }
+
+    val onSetSleepTimerMinutes: (Int) -> Unit = { minutes ->
+        viewModel.startSleepTimer(minutes)
+        hudState = GestureHudState.SleepTimer("Sleep timer $minutes min")
+    }
+
+    val onCancelSleepTimer: () -> Unit = {
+        viewModel.cancelSleepTimer()
+        hudState = GestureHudState.SleepTimer("Sleep timer off")
+    }
+
+    val onTakeScreenshot: () -> Unit = {
+        viewModel.takeScreenshot()
     }
 
     val onShareClick: () -> Unit = {
@@ -257,6 +327,8 @@ fun PlayerRoute(
         panelState = panelState,
         hudState = hudState,
         showAudioSubtitlesSheet = showAudioSubtitlesSheet,
+        showSleepTimerDialog = showSleepTimerDialog,
+        showEqualizerDialog = showEqualizerDialog,
         onToggleControls = { viewModel.toggleControls() },
         onBackClick = handleBackClick,
         onPlayPauseClick = { viewModel.togglePlayPause() },
@@ -289,6 +361,17 @@ fun PlayerRoute(
                 arrayOf("text/*", "application/x-subrip", "application/octet-stream", "*/*")
             )
         },
+        onTakeScreenshot = onTakeScreenshot,
+        onOpenSleepTimer = { showSleepTimerDialog = true },
+        onDismissSleepTimer = { showSleepTimerDialog = false },
+        onSetSleepTimerMinutes = onSetSleepTimerMinutes,
+        onCancelSleepTimer = onCancelSleepTimer,
+        onOpenEqualizer = { showEqualizerDialog = true },
+        onDismissEqualizer = { showEqualizerDialog = false },
+        onAudioBoostSelected = onAudioBoostSelected,
+        onToggleEqualizer = { viewModel.setEqualizerEnabled(it) },
+        onSelectEqualizerPreset = { viewModel.setEqualizerPreset(it) },
+        onEqualizerBandChange = { band, level -> viewModel.setEqualizerBandLevel(band, level) },
         modifier = modifier
     )
 }
@@ -303,6 +386,8 @@ fun PlayerScreen(
     panelState: PlayerPanelState = rememberPlayerPanelState(),
     hudState: GestureHudState = GestureHudState.None,
     showAudioSubtitlesSheet: Boolean = false,
+    showSleepTimerDialog: Boolean = false,
+    showEqualizerDialog: Boolean = false,
     onToggleControls: () -> Unit = {},
     onBackClick: () -> Unit = {},
     onPlayPauseClick: () -> Unit = {},
@@ -331,7 +416,18 @@ fun PlayerScreen(
     onSubtitleDelayChange: (Long) -> Unit = {},
     subtitleAppearance: com.nexus.player.core.playback.model.SubtitleAppearance = com.nexus.player.core.playback.model.SubtitleAppearance.DEFAULT,
     onSubtitleAppearanceChange: (com.nexus.player.core.playback.model.SubtitleAppearance) -> Unit = {},
-    onAddExternalSubtitleClick: () -> Unit = {}
+    onAddExternalSubtitleClick: () -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onDismissSleepTimer: () -> Unit = {},
+    onSetSleepTimerMinutes: (Int) -> Unit = {},
+    onCancelSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onDismissEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
+    onToggleEqualizer: (Boolean) -> Unit = {},
+    onSelectEqualizerPreset: (String) -> Unit = {},
+    onEqualizerBandChange: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val playerState by player.state.collectAsStateWithLifecycle()
 
@@ -344,6 +440,10 @@ fun PlayerScreen(
         onShareClick = onShareClick,
         onSeekDurationSelected = onSeekDurationSelected,
         onAutoNextToggled = onAutoNextToggled,
+        onTakeScreenshot = onTakeScreenshot,
+        onOpenSleepTimer = onOpenSleepTimer,
+        onOpenEqualizer = onOpenEqualizer,
+        onAudioBoostSelected = onAudioBoostSelected,
         videoContent = { videoModifier ->
             Box(
                 modifier = videoModifier
@@ -401,6 +501,8 @@ fun PlayerScreen(
                             onSpeedSelected = onSpeedSelected,
                             onCycleCropMode = onCycleCropMode,
                             onToggleOrientationLock = onToggleOrientationLock,
+                            onTakeScreenshot = onTakeScreenshot,
+                            onOpenSleepTimer = onOpenSleepTimer,
                             onOpenSettings = {
                                 panelState.open()
                             },
@@ -429,6 +531,32 @@ fun PlayerScreen(
             onSubtitleAppearanceChange = onSubtitleAppearanceChange,
             onAddExternalSubtitleClick = onAddExternalSubtitleClick,
             onDismissRequest = onDismissAudioSubtitles
+        )
+    }
+
+    if (showSleepTimerDialog) {
+        val remainingSeconds = (uiState as? PlayerUiState.Ready)?.sleepTimerRemainingSeconds
+        SleepTimerDialog(
+            remainingSeconds = remainingSeconds,
+            onSetTimerMinutes = onSetSleepTimerMinutes,
+            onCancelTimer = onCancelSleepTimer,
+            onDismissRequest = onDismissSleepTimer
+        )
+    }
+
+    if (showEqualizerDialog) {
+        val readyState = uiState as? PlayerUiState.Ready
+        val isEqEnabled = readyState?.isEqualizerEnabled ?: false
+        val eqPreset = readyState?.equalizerPreset ?: "Flat"
+        val bandLevels by player.audioEffectsController.bandLevels.collectAsStateWithLifecycle()
+        EqualizerDialog(
+            isEnabled = isEqEnabled,
+            onToggleEnabled = onToggleEqualizer,
+            currentPreset = eqPreset,
+            onSelectPreset = onSelectEqualizerPreset,
+            bandLevels = bandLevels,
+            onBandLevelChange = onEqualizerBandChange,
+            onDismissRequest = onDismissEqualizer
         )
     }
 }

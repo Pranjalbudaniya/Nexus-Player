@@ -32,6 +32,10 @@ fun PlayerSettingsBottomSheet(
     onClosePanel: () -> Unit,
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -54,6 +58,10 @@ fun PlayerSettingsBottomSheet(
             onClosePanel = onClosePanel,
             onSeekDurationSelected = onSeekDurationSelected,
             onAutoNextToggled = onAutoNextToggled,
+            onTakeScreenshot = onTakeScreenshot,
+            onOpenSleepTimer = onOpenSleepTimer,
+            onOpenEqualizer = onOpenEqualizer,
+            onAudioBoostSelected = onAudioBoostSelected,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = NexusTheme.spacing.large)

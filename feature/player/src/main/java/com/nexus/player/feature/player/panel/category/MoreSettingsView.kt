@@ -37,11 +37,14 @@ import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.feature.player.PlayerUiState
 import com.nexus.player.feature.player.panel.component.PlayerSettingItem
 
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Equalizer
+
 /**
- * Flat list of genuinely advanced player actions and technical metadata for Step 17.
+ * Flat list of genuinely advanced player actions and technical metadata for Step 17 & 20.
  *
- * Excludes all common player controls (Audio, Subtitles, Speed, Crop, Orientation, Fullscreen)
- * which now live directly on the player control surface.
+ * Excludes standard playback bar items while offering fast access to audio utilities,
+ * sleep timer, equalizer, screenshots, and hardware settings.
  */
 @Composable
 fun MoreSettingsView(
@@ -52,6 +55,10 @@ fun MoreSettingsView(
     onShareClick: () -> Unit,
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -110,10 +117,82 @@ fun MoreSettingsView(
         Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
 
         Text(
+            text = "Audio & Utilities",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
+        )
+
+        PlayerSettingItem(
+            title = "Sleep Timer",
+            subtitle = if (state.sleepTimerRemainingSeconds != null && state.sleepTimerRemainingSeconds > 0) {
+                val mins = state.sleepTimerRemainingSeconds / 60
+                val secs = state.sleepTimerRemainingSeconds % 60
+                String.format(java.util.Locale.ROOT, "%02d:%02d remaining", mins, secs)
+            } else {
+                "Turn off playback automatically"
+            },
+            leadingIcon = Icons.Filled.Timer,
+            trailingValue = if (state.sleepTimerRemainingSeconds != null && state.sleepTimerRemainingSeconds > 0) "Active" else "Off",
+            onClick = onOpenSleepTimer,
+            testTag = "action_sleep_timer"
+        )
+
+        PlayerSettingItem(
+            title = "Equalizer",
+            subtitle = if (state.isEqualizerEnabled) "Active: ${state.equalizerPreset}" else "Disabled",
+            leadingIcon = Icons.Filled.Equalizer,
+            trailingValue = if (state.isEqualizerEnabled) state.equalizerPreset else "Off",
+            onClick = onOpenEqualizer,
+            testTag = "action_equalizer"
+        )
+
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.extraSmall))
+
+        Text(
+            text = "Audio Boost: ${state.audioBoostPercent}%",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = NexusTheme.spacing.extraSmall, bottom = NexusTheme.spacing.extraSmall)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
+        ) {
+            listOf(100, 110, 125, 150, 175, 200).forEach { boost ->
+                FilterChip(
+                    selected = state.audioBoostPercent == boost,
+                    onClick = { onAudioBoostSelected(boost) },
+                    label = { Text("${boost}%", style = MaterialTheme.typography.labelSmall) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("more_audio_boost_${boost}")
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+
+        Text(
             text = "Actions",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
+        )
+
+        PlayerSettingItem(
+            title = "Take Screenshot",
+            subtitle = "Capture current video frame to Pictures",
+            leadingIcon = Icons.Filled.CameraAlt,
+            onClick = onTakeScreenshot,
+            testTag = "action_take_screenshot"
         )
 
         PlayerSettingItem(

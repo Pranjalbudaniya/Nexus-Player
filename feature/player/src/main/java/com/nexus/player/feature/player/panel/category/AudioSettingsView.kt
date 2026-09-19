@@ -25,10 +25,17 @@ import androidx.compose.ui.platform.testTag
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.feature.player.panel.component.PlayerSettingItem
 
+val AUDIO_BOOST_PRESETS = listOf(100, 110, 125, 150, 175, 200)
+
 @Composable
 fun AudioSettingsView(
-    isMuted: Boolean,
-    onToggleMute: () -> Unit,
+    isMuted: Boolean = false,
+    onToggleMute: () -> Unit = {},
+    currentAudioBoostPercent: Int = 100,
+    onAudioBoostSelected: (Int) -> Unit = {},
+    isEqualizerEnabled: Boolean = false,
+    equalizerPreset: String = "Flat",
+    onOpenEqualizer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -54,15 +61,6 @@ fun AudioSettingsView(
             testTag = "audio_mute_toggle"
         )
 
-        PlayerSettingItem(
-            title = "Audio Track",
-            subtitle = "Active audio stream",
-            leadingIcon = Icons.Filled.Audiotrack,
-            trailingValue = "Track 1 (Stereo)",
-            onClick = {},
-            enabled = false
-        )
-
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
@@ -76,47 +74,20 @@ fun AudioSettingsView(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
+            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
         ) {
-            for (boost in listOf("100%", "125%", "150%", "200%")) {
+            for (boost in AUDIO_BOOST_PRESETS) {
                 FilterChip(
-                    selected = boost == "100%",
-                    onClick = {},
-                    label = { Text(boost, style = MaterialTheme.typography.labelMedium) },
+                    selected = currentAudioBoostPercent == boost,
+                    onClick = { onAudioBoostSelected(boost) },
+                    label = { Text("${boost}%", style = MaterialTheme.typography.labelSmall) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-
-        Text(
-            text = "Audio Delay / Sync",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
-        ) {
-            for (delay in listOf("-200ms", "-100ms", "0ms", "+100ms", "+200ms")) {
-                FilterChip(
-                    selected = delay == "0ms",
-                    onClick = {},
-                    label = { Text(delay, style = MaterialTheme.typography.labelSmall) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("chip_audio_boost_${boost}")
                 )
             }
         }
@@ -134,11 +105,12 @@ fun AudioSettingsView(
 
         PlayerSettingItem(
             title = "Equalizer",
-            subtitle = "Audio frequency balance controls",
+            subtitle = if (isEqualizerEnabled) "Active: $equalizerPreset" else "Disabled",
             leadingIcon = Icons.Filled.Equalizer,
-            onClick = {},
-            enabled = false,
-            badgeText = "Coming Soon"
+            trailingValue = if (isEqualizerEnabled) equalizerPreset else "Off",
+            onClick = onOpenEqualizer,
+            enabled = true,
+            testTag = "setting_equalizer"
         )
     }
 }

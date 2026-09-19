@@ -329,4 +329,64 @@ class FakeNexusPlayer : NexusPlayer {
             )
         }
     }
+
+    var fakeAudioEffectsController: com.nexus.player.core.playback.audio.AudioEffectsController = FakeAudioEffectsController()
+    override val audioEffectsController: com.nexus.player.core.playback.audio.AudioEffectsController get() = fakeAudioEffectsController
+
+    var frameToCapture: android.graphics.Bitmap? = null
+    override suspend fun captureFrame(): android.graphics.Bitmap? = frameToCapture
+}
+
+class FakeAudioEffectsController : com.nexus.player.core.playback.audio.AudioEffectsController {
+    override var isBoostSupported: Boolean = true
+    val boostFlow = kotlinx.coroutines.flow.MutableStateFlow(100)
+    override val boostPercent: kotlinx.coroutines.flow.StateFlow<Int> = boostFlow
+
+    override var isEqualizerSupported: Boolean = true
+    val eqEnabledFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    override val isEqualizerEnabled: kotlinx.coroutines.flow.StateFlow<Boolean> = eqEnabledFlow
+
+    val presetFlow = kotlinx.coroutines.flow.MutableStateFlow("Flat")
+    override val currentPreset: kotlinx.coroutines.flow.StateFlow<String> = presetFlow
+
+    val levelsFlow = kotlinx.coroutines.flow.MutableStateFlow<Map<Int, Int>>((0 until 5).associateWith { 0 })
+    override val bandLevels: kotlinx.coroutines.flow.StateFlow<Map<Int, Int>> = levelsFlow
+
+    override val bandFrequencies: List<Int> = listOf(60, 230, 910, 3600, 14000)
+    override val bandLevelRange: IntRange = -1500..1500
+
+    var attachedAudioSessionId: Int = 0
+
+    override fun attachAudioSession(audioSessionId: Int) {
+        attachedAudioSessionId = audioSessionId
+    }
+
+    override fun detachAudioSession() {
+        attachedAudioSessionId = 0
+    }
+
+    override fun setAudioBoost(percent: Int) {
+        boostFlow.value = percent.coerceIn(100, 200)
+    }
+
+    override fun setEqualizerEnabled(enabled: Boolean) {
+        eqEnabledFlow.value = enabled
+    }
+
+    override fun setEqualizerPreset(presetName: String) {
+        presetFlow.value = presetName
+        val preset = com.nexus.player.core.playback.audio.EqualizerPreset.fromName(presetName)
+        levelsFlow.value = preset.bandGains.mapIndexed { idx, gain -> idx to gain }.toMap()
+    }
+
+    override fun setBandLevel(bandIndex: Int, levelmB: Int) {
+        val current = levelsFlow.value.toMutableMap()
+        current[bandIndex] = levelmB.coerceIn(bandLevelRange)
+        levelsFlow.value = current
+        presetFlow.value = "Custom"
+    }
+
+    override fun release() {
+        attachedAudioSessionId = 0
+    }
 }

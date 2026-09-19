@@ -30,6 +30,7 @@ fun DisplaySettingsView(
     currentResizeMode: Int,
     onResizeModeSelected: (Int) -> Unit,
     onToggleOrientation: () -> Unit,
+    onTakeScreenshot: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -113,9 +114,9 @@ fun DisplaySettingsView(
             title = "Take Screenshot",
             subtitle = "Capture current video frame",
             leadingIcon = Icons.Filled.CropFree,
-            onClick = {},
-            enabled = false,
-            badgeText = "Coming Soon"
+            onClick = onTakeScreenshot,
+            enabled = true,
+            testTag = "display_take_screenshot"
         )
     }
 }

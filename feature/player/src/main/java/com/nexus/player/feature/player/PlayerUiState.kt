@@ -39,7 +39,13 @@ sealed interface PlayerUiState {
         val isFullscreen: Boolean = false,
         val isPanelOpen: Boolean = false,
         val seekDurationSeconds: Int = 10,
-        val isAutoNextEnabled: Boolean = false
+        val isAutoNextEnabled: Boolean = false,
+        val audioBoostPercent: Int = 100,
+        val isEqualizerEnabled: Boolean = false,
+        val equalizerPreset: String = "Flat",
+        val sleepTimerRemainingSeconds: Long? = null,
+        val volumePercent: Int = 100,
+        val brightnessPercent: Int = 50
     ) : PlayerUiState {
         val isBuffering: Boolean
             get() = playbackStatus == PlaybackStatus.Buffering

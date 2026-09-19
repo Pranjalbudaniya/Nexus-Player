@@ -25,6 +25,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.MoreVert
@@ -71,10 +73,10 @@ import com.nexus.player.core.playback.model.VideoScaleMode
 import com.nexus.player.feature.player.PlayerUiState
 
 /**
- * VLC-style powerful video player controls overlay for Step 17.
+ * VLC-style powerful video player controls overlay for Step 17 & 20.
  *
  * Layout:
- * - Top bar: Back navigation, video title, and More actions button
+ * - Top bar: Back navigation, video title, Sleep Timer indicator, Screenshot action, and More actions button
  * - Center: Primary Play/Pause toggle + Buffering spinner
  * - Bottom:
  *   - Seek timeline slider with timestamps
@@ -97,6 +99,8 @@ fun PlayerControls(
     onCycleCropMode: () -> Unit,
     onToggleOrientationLock: () -> Unit,
     onToggleFullscreen: () -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onDraggingChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
@@ -166,16 +170,61 @@ fun PlayerControls(
                         )
                     }
 
-                    // More Menu (Flat list of advanced actions)
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.testTag("player_settings_button")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = "More player actions",
-                            tint = Color.White
-                        )
+                        if (state.sleepTimerRemainingSeconds != null && state.sleepTimerRemainingSeconds > 0) {
+                            val mins = state.sleepTimerRemainingSeconds / 60
+                            val secs = state.sleepTimerRemainingSeconds % 60
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .clickable(onClick = onOpenSleepTimer)
+                                    .testTag("player_sleep_timer_badge")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Timer,
+                                        contentDescription = "Sleep timer active",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = String.format(Locale.ROOT, "%02d:%02d", mins, secs),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+
+                        IconButton(
+                            onClick = onTakeScreenshot,
+                            modifier = Modifier.testTag("player_screenshot_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = "Take Screenshot",
+                                tint = Color.White
+                            )
+                        }
+
+                        // More Menu (Flat list of advanced actions)
+                        IconButton(
+                            onClick = onOpenSettings,
+                            modifier = Modifier.testTag("player_settings_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "More player actions",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }

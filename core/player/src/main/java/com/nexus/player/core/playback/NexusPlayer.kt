@@ -169,4 +169,15 @@ interface NexusPlayer {
      * This is the hook for the Continue Watching system to persist progress.
      */
     fun getCurrentPlaybackPosition(): PlaybackPosition?
+
+    /**
+     * Controller managing audio boost and equalizer audio effects.
+     */
+    val audioEffectsController: com.nexus.player.core.playback.audio.AudioEffectsController
+
+    /**
+     * Captures the current video frame as a [android.graphics.Bitmap].
+     * Returns null if the video surface is unavailable or capture fails.
+     */
+    suspend fun captureFrame(): android.graphics.Bitmap?
 }

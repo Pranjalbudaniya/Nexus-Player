@@ -54,10 +54,15 @@ fun PlayerGestureSurface(
 
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val downTime = System.currentTimeMillis()
                     val downX = down.position.x
                     val downY = down.position.y
-                    val isLeftHalf = downX < size.width / 2f
+
+                    // Ignore touches in the outer 4% edges to prevent system navigation back-gesture clashes
+                    val edgeMargin = size.width * 0.04f
+                    val isInEdge = downX < edgeMargin || downX > (size.width - edgeMargin)
+
+                    val isLeftHalf = downX < size.width * 0.48f
+                    val isRightHalf = downX > size.width * 0.52f
 
                     var isDragging = false
                     var isLongPressActive = false
@@ -113,11 +118,11 @@ fun PlayerGestureSurface(
                             break
                         }
 
-                        // Check vertical drag
+                        // Check vertical drag with axis dominance and edge protection
                         val totalDy = downY - change.position.y
                         val totalDx = abs(downX - change.position.x)
 
-                        if (!isDragging && abs(totalDy) > touchSlop && abs(totalDy) > totalDx) {
+                        if (!isDragging && !isInEdge && abs(totalDy) > touchSlop * 1.25f && abs(totalDy) > totalDx * 1.5f) {
                             isDragging = true
                             longPressJob.cancel()
                             singleTapJob?.cancel()
@@ -129,7 +134,7 @@ fun PlayerGestureSurface(
                             val delta = -dy / size.height
                             if (isLeftHalf) {
                                 onBrightnessDelta(delta)
-                            } else {
+                            } else if (isRightHalf) {
                                 onVolumeDelta(delta)
                             }
                             change.consume()

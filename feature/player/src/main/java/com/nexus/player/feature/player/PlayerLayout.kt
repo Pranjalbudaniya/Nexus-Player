@@ -44,6 +44,10 @@ fun PlayerLayout(
     onShareClick: () -> Unit,
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
     videoContent: @Composable (modifier: Modifier) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -114,6 +118,10 @@ fun PlayerLayout(
                         onClosePanel = { panelState.close() },
                         onSeekDurationSelected = onSeekDurationSelected,
                         onAutoNextToggled = onAutoNextToggled,
+                        onTakeScreenshot = onTakeScreenshot,
+                        onOpenSleepTimer = onOpenSleepTimer,
+                        onOpenEqualizer = onOpenEqualizer,
+                        onAudioBoostSelected = onAudioBoostSelected,
                         modifier = Modifier.width(animatedPanelWidth)
                     )
                 }
@@ -130,7 +138,11 @@ fun PlayerLayout(
                     onShareClick = onShareClick,
                     onClosePanel = { panelState.close() },
                     onSeekDurationSelected = onSeekDurationSelected,
-                    onAutoNextToggled = onAutoNextToggled
+                    onAutoNextToggled = onAutoNextToggled,
+                    onTakeScreenshot = onTakeScreenshot,
+                    onOpenSleepTimer = onOpenSleepTimer,
+                    onOpenEqualizer = onOpenEqualizer,
+                    onAudioBoostSelected = onAudioBoostSelected
                 )
             }
         }

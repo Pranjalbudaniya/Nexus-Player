@@ -44,6 +44,9 @@ interface PlayerPreferencesRepository {
     val subtitleAppearance: Flow<SubtitleAppearance>
     val seekDurationSeconds: Flow<Int>
     val isAutoNextEnabled: Flow<Boolean>
+    val audioBoostPercent: Flow<Int>
+    val isEqualizerEnabled: Flow<Boolean>
+    val equalizerPreset: Flow<String>
 
     suspend fun setPlaybackSpeed(speed: Float)
     suspend fun setResizeMode(mode: Int)
@@ -56,6 +59,9 @@ interface PlayerPreferencesRepository {
     suspend fun setSubtitleAppearance(appearance: SubtitleAppearance)
     suspend fun setSeekDurationSeconds(duration: Int)
     suspend fun setAutoNextEnabled(enabled: Boolean)
+    suspend fun setAudioBoost(percent: Int)
+    suspend fun setEqualizerEnabled(enabled: Boolean)
+    suspend fun setEqualizerPreset(preset: String)
 
     fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>>
     suspend fun addExternalSubtitle(videoId: String, subtitle: ExternalSubtitle)
@@ -81,6 +87,9 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         val SUBTITLE_POSITION = stringPreferencesKey("key_player_sub_position")
         val SEEK_DURATION_SECONDS = intPreferencesKey("key_player_seek_duration_seconds")
         val AUTO_NEXT_ENABLED = booleanPreferencesKey("key_player_auto_next_enabled")
+        val AUDIO_BOOST = intPreferencesKey("key_player_audio_boost")
+        val EQUALIZER_ENABLED = booleanPreferencesKey("key_player_equalizer_enabled")
+        val EQUALIZER_PRESET = stringPreferencesKey("key_player_equalizer_preset")
     }
 
     private val safePreferences: Flow<Preferences> = dataStore.data
@@ -105,6 +114,21 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override val isAutoNextEnabled: Flow<Boolean> = safePreferences
         .map { prefs ->
             prefs[PreferencesKeys.AUTO_NEXT_ENABLED] ?: false
+        }
+
+    override val audioBoostPercent: Flow<Int> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.AUDIO_BOOST] ?: 100
+        }
+
+    override val isEqualizerEnabled: Flow<Boolean> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.EQUALIZER_ENABLED] ?: false
+        }
+
+    override val equalizerPreset: Flow<String> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.EQUALIZER_PRESET] ?: "Flat"
         }
 
     override val resizeMode: Flow<Int> = safePreferences
@@ -231,6 +255,24 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override suspend fun setAutoNextEnabled(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[PreferencesKeys.AUTO_NEXT_ENABLED] = enabled
+        }
+    }
+
+    override suspend fun setAudioBoost(percent: Int) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.AUDIO_BOOST] = percent.coerceIn(100, 200)
+        }
+    }
+
+    override suspend fun setEqualizerEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.EQUALIZER_ENABLED] = enabled
+        }
+    }
+
+    override suspend fun setEqualizerPreset(preset: String) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.EQUALIZER_PRESET] = preset
         }
     }
 

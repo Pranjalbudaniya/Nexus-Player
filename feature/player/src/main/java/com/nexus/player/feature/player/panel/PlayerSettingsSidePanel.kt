@@ -30,6 +30,10 @@ fun PlayerSettingsSidePanel(
     onClosePanel: () -> Unit,
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -53,7 +57,11 @@ fun PlayerSettingsSidePanel(
                 onShareClick = onShareClick,
                 onClosePanel = onClosePanel,
                 onSeekDurationSelected = onSeekDurationSelected,
-                onAutoNextToggled = onAutoNextToggled
+                onAutoNextToggled = onAutoNextToggled,
+                onTakeScreenshot = onTakeScreenshot,
+                onOpenSleepTimer = onOpenSleepTimer,
+                onOpenEqualizer = onOpenEqualizer,
+                onAudioBoostSelected = onAudioBoostSelected
             )
         }
     }

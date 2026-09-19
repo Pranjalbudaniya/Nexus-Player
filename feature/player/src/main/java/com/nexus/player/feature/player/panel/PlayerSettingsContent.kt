@@ -43,6 +43,10 @@ fun PlayerSettingsContent(
     onClosePanel: () -> Unit,
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
+    onTakeScreenshot: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onAudioBoostSelected: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -95,7 +99,11 @@ fun PlayerSettingsContent(
                 onDecoderModeSelected = onDecoderModeSelected,
                 onShareClick = onShareClick,
                 onSeekDurationSelected = onSeekDurationSelected,
-                onAutoNextToggled = onAutoNextToggled
+                onAutoNextToggled = onAutoNextToggled,
+                onTakeScreenshot = onTakeScreenshot,
+                onOpenSleepTimer = onOpenSleepTimer,
+                onOpenEqualizer = onOpenEqualizer,
+                onAudioBoostSelected = onAudioBoostSelected
             )
         }
     }

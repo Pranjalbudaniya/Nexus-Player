@@ -106,6 +106,7 @@ class PlayerViewModelTest {
             playerPreferencesRepository = fakePreferencesRepository,
             subtitleRepository = fakeSubtitleRepository,
             ioDispatcher = testDispatcher,
+            appContext = null,
             timeProvider = { virtualTime }
         )
         testScope.backgroundScope.launch(UnconfinedTestDispatcher(testScope.testScheduler)) {
@@ -868,6 +869,145 @@ class PlayerViewModelTest {
         job.cancel()
     }
 
+    @Test
+    fun setAudioBoost_updatesControllerAndPreferences_clampedBetween100And200() = testScope.runTest {
+        val video = createSampleVideo("vid_boost")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_boost")))
+        advanceUntilIdle()
+
+        viewModel.setAudioBoost(150)
+        advanceUntilIdle()
+        assertEquals(150, fakePlayer.audioEffectsController.boostPercent.value)
+        assertEquals(150, fakePreferencesRepository.audioBoostFlow.value)
+        val readyState = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(150, readyState.audioBoostPercent)
+
+        // Clamping check
+        viewModel.setAudioBoost(250)
+        advanceUntilIdle()
+        assertEquals(200, fakePlayer.audioEffectsController.boostPercent.value)
+        assertEquals(200, fakePreferencesRepository.audioBoostFlow.value)
+
+        viewModel.setAudioBoost(50)
+        advanceUntilIdle()
+        assertEquals(100, fakePlayer.audioEffectsController.boostPercent.value)
+        assertEquals(100, fakePreferencesRepository.audioBoostFlow.value)
+    }
+
+    @Test
+    fun setEqualizer_updatesControllerAndPreferences() = testScope.runTest {
+        val video = createSampleVideo("vid_eq")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_eq")))
+        advanceUntilIdle()
+
+        viewModel.setEqualizerEnabled(true)
+        advanceUntilIdle()
+        assertTrue(fakePlayer.audioEffectsController.isEqualizerEnabled.value)
+        assertTrue(fakePreferencesRepository.isEqualizerEnabledFlow.value)
+        assertTrue((viewModel.uiState.value as PlayerUiState.Ready).isEqualizerEnabled)
+
+        viewModel.setEqualizerPreset("Rock")
+        advanceUntilIdle()
+        assertEquals("Rock", fakePlayer.audioEffectsController.currentPreset.value)
+        assertEquals("Rock", fakePreferencesRepository.equalizerPresetFlow.value)
+        assertEquals("Rock", (viewModel.uiState.value as PlayerUiState.Ready).equalizerPreset)
+
+        viewModel.setEqualizerBandLevel(0, 500)
+        advanceUntilIdle()
+        assertEquals(500, fakePlayer.audioEffectsController.bandLevels.value[0])
+    }
+
+    @Test
+    fun volumeAndBrightness_updatesReadyUiState() = testScope.runTest {
+        val video = createSampleVideo("vid_vol_bright")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_vol_bright")))
+        advanceUntilIdle()
+
+        viewModel.setVolumePercent(75)
+        viewModel.setBrightnessPercent(80)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(75, state.volumePercent)
+        assertEquals(80, state.brightnessPercent)
+    }
+
+    @Test
+    fun sleepTimer_countdownTicks_pausesPlaybackAtZero_emitsCompletedEvent() = testScope.runTest {
+        val video = createSampleVideo("vid_timer")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_timer")))
+        advanceUntilIdle()
+
+        val events = mutableListOf<PlayerEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.playerEvents.collect { events.add(it) }
+        }
+
+        fakePlayer.play()
+        assertTrue(fakePlayer.state.value.isPlaying)
+
+        viewModel.startSleepTimer(1) // 1 minute = 60 seconds
+        testScheduler.runCurrent()
+        val stateWithTimer = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(60L, stateWithTimer.sleepTimerRemainingSeconds)
+
+        // Advance 30 seconds
+        testScheduler.advanceTimeBy(30_000L)
+        testScheduler.runCurrent()
+        assertEquals(30L, (viewModel.uiState.value as PlayerUiState.Ready).sleepTimerRemainingSeconds)
+
+        // Advance remaining 30 seconds to reach 0
+        testScheduler.advanceTimeBy(30_000L)
+        advanceUntilIdle()
+
+        assertFalse(fakePlayer.state.value.isPlaying)
+        assertEquals(null, (viewModel.uiState.value as PlayerUiState.Ready).sleepTimerRemainingSeconds)
+        assertTrue(events.any { it is PlayerEvent.SleepTimerCompleted && it.videoId == "vid_timer" })
+
+        job.cancel()
+    }
+
+    @Test
+    fun sleepTimer_cancel_clearsCountdownState() = testScope.runTest {
+        val video = createSampleVideo("vid_timer_cancel")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_timer_cancel")))
+        advanceUntilIdle()
+
+        viewModel.startSleepTimer(10)
+        testScheduler.runCurrent()
+        assertEquals(600L, (viewModel.uiState.value as PlayerUiState.Ready).sleepTimerRemainingSeconds)
+
+        viewModel.cancelSleepTimer()
+        testScheduler.runCurrent()
+        assertEquals(null, (viewModel.uiState.value as PlayerUiState.Ready).sleepTimerRemainingSeconds)
+    }
+
+    @Test
+    fun takeScreenshot_nullBitmap_emitsScreenshotFailed() = testScope.runTest {
+        val video = createSampleVideo("vid_snap")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_snap")))
+        advanceUntilIdle()
+
+        val events = mutableListOf<PlayerEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.playerEvents.collect { events.add(it) }
+        }
+
+        // Frame capture returns null by default in fakePlayer
+        viewModel.takeScreenshot()
+        advanceUntilIdle()
+
+        assertTrue(events.any { it is PlayerEvent.ScreenshotFailed })
+
+        job.cancel()
+    }
+
     // =========================================================================
     // Test Fake VideoRepository
     // =========================================================================
@@ -936,6 +1076,9 @@ class PlayerViewModelTest {
         val subtitleAppearanceFlow = MutableStateFlow(SubtitleAppearance())
         val seekDurationFlow = MutableStateFlow(10)
         val isAutoNextFlow = MutableStateFlow(false)
+        val audioBoostFlow = MutableStateFlow(100)
+        val isEqualizerEnabledFlow = MutableStateFlow(false)
+        val equalizerPresetFlow = MutableStateFlow("Flat")
         val externalSubtitlesMap = mutableMapOf<String, MutableStateFlow<List<ExternalSubtitle>>>()
 
         override val playbackSpeed: Flow<Float> = speedFlow
@@ -949,6 +1092,9 @@ class PlayerViewModelTest {
         override val subtitleAppearance: Flow<SubtitleAppearance> = subtitleAppearanceFlow
         override val seekDurationSeconds: Flow<Int> = seekDurationFlow
         override val isAutoNextEnabled: Flow<Boolean> = isAutoNextFlow
+        override val audioBoostPercent: Flow<Int> = audioBoostFlow
+        override val isEqualizerEnabled: Flow<Boolean> = isEqualizerEnabledFlow
+        override val equalizerPreset: Flow<String> = equalizerPresetFlow
 
         override suspend fun setPlaybackSpeed(speed: Float) {
             speedFlow.value = speed
@@ -992,6 +1138,18 @@ class PlayerViewModelTest {
 
         override suspend fun setAutoNextEnabled(enabled: Boolean) {
             isAutoNextFlow.value = enabled
+        }
+
+        override suspend fun setAudioBoost(percent: Int) {
+            audioBoostFlow.value = percent
+        }
+
+        override suspend fun setEqualizerEnabled(enabled: Boolean) {
+            isEqualizerEnabledFlow.value = enabled
+        }
+
+        override suspend fun setEqualizerPreset(preset: String) {
+            equalizerPresetFlow.value = preset
         }
 
         override fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>> {

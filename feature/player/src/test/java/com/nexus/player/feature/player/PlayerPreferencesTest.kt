@@ -109,4 +109,46 @@ class PlayerPreferencesTest {
         assertEquals("2.5×", formatPlaybackSpeed(2.5f))
         assertEquals("3×", formatPlaybackSpeed(3.0f))
     }
+
+    @Test
+    fun audioBoostPercent_defaultIs100() = runTest(testDispatcher) {
+        assertEquals(100, repository.audioBoostPercent.first())
+    }
+
+    @Test
+    fun audioBoostPercent_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setAudioBoost(150)
+        assertEquals(150, repository.audioBoostPercent.first())
+
+        repository.setAudioBoost(200)
+        assertEquals(200, repository.audioBoostPercent.first())
+    }
+
+    @Test
+    fun isEqualizerEnabled_defaultIsFalse() = runTest(testDispatcher) {
+        assertFalse(repository.isEqualizerEnabled.first())
+    }
+
+    @Test
+    fun isEqualizerEnabled_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setEqualizerEnabled(true)
+        assertTrue(repository.isEqualizerEnabled.first())
+
+        repository.setEqualizerEnabled(false)
+        assertFalse(repository.isEqualizerEnabled.first())
+    }
+
+    @Test
+    fun equalizerPreset_defaultIsFlat() = runTest(testDispatcher) {
+        assertEquals("Flat", repository.equalizerPreset.first())
+    }
+
+    @Test
+    fun equalizerPreset_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setEqualizerPreset("Rock")
+        assertEquals("Rock", repository.equalizerPreset.first())
+
+        repository.setEqualizerPreset("Classical")
+        assertEquals("Classical", repository.equalizerPreset.first())
+    }
 }

@@ -1,5 +1,6 @@
 package com.nexus.player.feature.player
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -18,7 +19,9 @@ import com.nexus.player.core.playback.model.SubtitleAppearance
 import com.nexus.player.core.playback.model.VideoScaleMode
 import com.nexus.player.core.playback.repository.SubtitleRepository
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepository
+import com.nexus.player.feature.player.screenshot.ScreenshotManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +48,9 @@ import javax.inject.Inject
  */
 sealed interface PlayerEvent {
     data class VideoCompleted(val videoId: String) : PlayerEvent
+    data class ScreenshotSaved(val uri: Uri) : PlayerEvent
+    data class ScreenshotFailed(val error: String) : PlayerEvent
+    data class SleepTimerCompleted(val videoId: String) : PlayerEvent
 }
 
 /**
@@ -70,6 +76,7 @@ class PlayerViewModel internal constructor(
     private val playerPreferencesRepository: PlayerPreferencesRepository,
     private val subtitleRepository: SubtitleRepository,
     private val ioDispatcher: CoroutineDispatcher,
+    @ApplicationContext private val appContext: Context? = null,
     internal var timeProvider: () -> Long
 ) : ViewModel() {
 
@@ -80,7 +87,8 @@ class PlayerViewModel internal constructor(
         player: NexusPlayer,
         playerPreferencesRepository: PlayerPreferencesRepository,
         subtitleRepository: SubtitleRepository,
-        @Dispatcher(NexusDispatchers.IO) ioDispatcher: CoroutineDispatcher
+        @Dispatcher(NexusDispatchers.IO) ioDispatcher: CoroutineDispatcher,
+        @ApplicationContext appContext: Context
     ) : this(
         savedStateHandle = savedStateHandle,
         videoRepository = videoRepository,
@@ -88,6 +96,7 @@ class PlayerViewModel internal constructor(
         playerPreferencesRepository = playerPreferencesRepository,
         subtitleRepository = subtitleRepository,
         ioDispatcher = ioDispatcher,
+        appContext = appContext,
         timeProvider = { System.currentTimeMillis() }
     )
 
@@ -132,6 +141,37 @@ class PlayerViewModel internal constructor(
             initialValue = false
         )
 
+    val audioBoostPercent: StateFlow<Int> = playerPreferencesRepository.audioBoostPercent
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = 100
+        )
+
+    val isEqualizerEnabled: StateFlow<Boolean> = playerPreferencesRepository.isEqualizerEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
+    val equalizerPreset: StateFlow<String> = playerPreferencesRepository.equalizerPreset
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = "Flat"
+        )
+
+    private val _sleepTimerRemainingSeconds = MutableStateFlow<Long?>(null)
+    val sleepTimerRemainingSeconds: StateFlow<Long?> = _sleepTimerRemainingSeconds.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
+    private val _volumePercent = MutableStateFlow(100)
+    val volumePercent: StateFlow<Int> = _volumePercent.asStateFlow()
+
+    private val _brightnessPercent = MutableStateFlow(50)
+    val brightnessPercent: StateFlow<Int> = _brightnessPercent.asStateFlow()
+
     private val _playerEvents = MutableSharedFlow<PlayerEvent>(extraBufferCapacity = 8)
     val playerEvents: SharedFlow<PlayerEvent> = _playerEvents.asSharedFlow()
 
@@ -141,14 +181,47 @@ class PlayerViewModel internal constructor(
         val isOrientationLocked: Boolean,
         val isFullscreen: Boolean,
         val seekDurationSeconds: Int,
-        val isAutoNextEnabled: Boolean
+        val isAutoNextEnabled: Boolean,
+        val audioBoostPercent: Int,
+        val isEqualizerEnabled: Boolean,
+        val equalizerPreset: String,
+        val sleepTimerRemainingSeconds: Long?,
+        val volumePercent: Int,
+        val brightnessPercent: Int
     )
 
-    private val _playerSettingsFlags = combine(
-        seekDurationSeconds,
-        isAutoNextEnabled
-    ) { seekDuration, autoNext ->
-        seekDuration to autoNext
+    private data class SettingsAndUtilitiesFlags(
+        val seekDuration: Int,
+        val autoNext: Boolean,
+        val audioBoost: Int,
+        val eqEnabled: Boolean,
+        val eqPreset: String,
+        val sleepTimer: Long?,
+        val volume: Int,
+        val brightness: Int
+    )
+
+    private val _settingsAndUtilitiesFlags = combine(
+        combine(seekDurationSeconds, isAutoNextEnabled, audioBoostPercent) { seek, autoNext, boost ->
+            Triple(seek, autoNext, boost)
+        },
+        combine(isEqualizerEnabled, equalizerPreset, _sleepTimerRemainingSeconds) { eqEnabled, eqPreset, timer ->
+            Triple(eqEnabled, eqPreset, timer)
+        },
+        combine(_volumePercent, _brightnessPercent) { vol, bright ->
+            vol to bright
+        }
+    ) { (seek, autoNext, boost), (eqEnabled, eqPreset, timer), (vol, bright) ->
+        SettingsAndUtilitiesFlags(
+            seekDuration = seek,
+            autoNext = autoNext,
+            audioBoost = boost,
+            eqEnabled = eqEnabled,
+            eqPreset = eqPreset,
+            sleepTimer = timer,
+            volume = vol,
+            brightness = bright
+        )
     }
 
     private val _uiFlags = combine(
@@ -156,15 +229,21 @@ class PlayerViewModel internal constructor(
         _isPanelOpen,
         _isOrientationLocked,
         _isFullscreen,
-        _playerSettingsFlags
-    ) { controlsVisible, isPanelOpen, isOrientationLocked, isFullscreen, settingsFlags ->
+        _settingsAndUtilitiesFlags
+    ) { controlsVisible, isPanelOpen, isOrientationLocked, isFullscreen, extra ->
         UiFlags(
             controlsVisible = controlsVisible,
             isPanelOpen = isPanelOpen,
             isOrientationLocked = isOrientationLocked,
             isFullscreen = isFullscreen,
-            seekDurationSeconds = settingsFlags.first,
-            isAutoNextEnabled = settingsFlags.second
+            seekDurationSeconds = extra.seekDuration,
+            isAutoNextEnabled = extra.autoNext,
+            audioBoostPercent = extra.audioBoost,
+            isEqualizerEnabled = extra.eqEnabled,
+            equalizerPreset = extra.eqPreset,
+            sleepTimerRemainingSeconds = extra.sleepTimer,
+            volumePercent = extra.volume,
+            brightnessPercent = extra.brightness
         )
     }
 
@@ -221,7 +300,13 @@ class PlayerViewModel internal constructor(
                     isFullscreen = flags.isFullscreen,
                     isPanelOpen = flags.isPanelOpen,
                     seekDurationSeconds = flags.seekDurationSeconds,
-                    isAutoNextEnabled = flags.isAutoNextEnabled
+                    isAutoNextEnabled = flags.isAutoNextEnabled,
+                    audioBoostPercent = flags.audioBoostPercent,
+                    isEqualizerEnabled = flags.isEqualizerEnabled,
+                    equalizerPreset = flags.equalizerPreset,
+                    sleepTimerRemainingSeconds = flags.sleepTimerRemainingSeconds,
+                    volumePercent = flags.volumePercent,
+                    brightnessPercent = flags.brightnessPercent
                 )
             }
         }
@@ -273,6 +358,21 @@ class PlayerViewModel internal constructor(
         viewModelScope.launch {
             playerPreferencesRepository.areSubtitlesEnabled.first().let { enabled ->
                 player.setSubtitlesEnabled(enabled)
+            }
+        }
+        viewModelScope.launch {
+            playerPreferencesRepository.audioBoostPercent.first().let { boost ->
+                player.audioEffectsController.setAudioBoost(boost)
+            }
+        }
+        viewModelScope.launch {
+            playerPreferencesRepository.isEqualizerEnabled.first().let { enabled ->
+                player.audioEffectsController.setEqualizerEnabled(enabled)
+            }
+        }
+        viewModelScope.launch {
+            playerPreferencesRepository.equalizerPreset.first().let { preset ->
+                player.audioEffectsController.setEqualizerPreset(preset)
             }
         }
     }
@@ -593,6 +693,93 @@ class PlayerViewModel internal constructor(
         } else {
             if (player.state.value.isPlaying && !_isPanelOpen.value) {
                 resetAutoHideTimer()
+            }
+        }
+    }
+
+    fun setAudioBoost(percent: Int) {
+        val clamped = percent.coerceIn(100, 200)
+        player.audioEffectsController.setAudioBoost(clamped)
+        viewModelScope.launch {
+            playerPreferencesRepository.setAudioBoost(clamped)
+        }
+    }
+
+    fun setEqualizerEnabled(enabled: Boolean) {
+        player.audioEffectsController.setEqualizerEnabled(enabled)
+        viewModelScope.launch {
+            playerPreferencesRepository.setEqualizerEnabled(enabled)
+        }
+    }
+
+    fun setEqualizerPreset(preset: String) {
+        player.audioEffectsController.setEqualizerPreset(preset)
+        viewModelScope.launch {
+            playerPreferencesRepository.setEqualizerPreset(preset)
+        }
+    }
+
+    fun setEqualizerBandLevel(bandIndex: Int, levelmB: Int) {
+        player.audioEffectsController.setBandLevel(bandIndex, levelmB)
+    }
+
+    fun setVolumePercent(percent: Int) {
+        _volumePercent.value = percent.coerceIn(0, 100)
+    }
+
+    fun setBrightnessPercent(percent: Int) {
+        _brightnessPercent.value = percent.coerceIn(0, 100)
+    }
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _sleepTimerRemainingSeconds.value = null
+            return
+        }
+        val totalSeconds = minutes * 60L
+        _sleepTimerRemainingSeconds.value = totalSeconds
+
+        sleepTimerJob = viewModelScope.launch {
+            var remaining = totalSeconds
+            while (isActive && remaining > 0L) {
+                delay(1000L)
+                remaining--
+                _sleepTimerRemainingSeconds.value = remaining
+            }
+            if (isActive && remaining == 0L) {
+                player.pause()
+                persistCurrentProgressImmediately()
+                _sleepTimerRemainingSeconds.value = null
+                val vid = _video.value?.id ?: currentLoadedId ?: ""
+                _playerEvents.emit(PlayerEvent.SleepTimerCompleted(vid))
+            }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        _sleepTimerRemainingSeconds.value = null
+    }
+
+    fun takeScreenshot(context: Context? = null) {
+        val targetContext = context ?: appContext
+        viewModelScope.launch {
+            if (targetContext == null) {
+                _playerEvents.emit(PlayerEvent.ScreenshotFailed("Application context not available"))
+                return@launch
+            }
+            val title = _video.value?.title ?: "Video"
+            val bitmap = player.captureFrame()
+            if (bitmap == null) {
+                _playerEvents.emit(PlayerEvent.ScreenshotFailed("Failed to capture video frame"))
+                return@launch
+            }
+            val result = ScreenshotManager.saveScreenshot(targetContext, bitmap, title)
+            result.onSuccess { uri ->
+                _playerEvents.emit(PlayerEvent.ScreenshotSaved(uri))
+            }.onFailure { err ->
+                _playerEvents.emit(PlayerEvent.ScreenshotFailed(err.message ?: "Screenshot error"))
             }
         }
     }

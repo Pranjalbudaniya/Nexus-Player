@@ -1,8 +1,17 @@
 package com.nexus.player.core.playback.internal
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
+import android.view.PixelCopy
+import android.view.SurfaceView
+import android.view.TextureView
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -13,12 +22,11 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import android.net.Uri
-import android.util.TypedValue
-import androidx.media3.common.C
 import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.ui.PlayerView
 import com.nexus.player.core.playback.NexusPlayer
+import com.nexus.player.core.playback.audio.AudioEffectsController
+import com.nexus.player.core.playback.audio.AudioEffectsControllerImpl
 import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.core.playback.model.ExternalSubtitle
 import com.nexus.player.core.playback.model.NexusMediaItem
@@ -41,8 +49,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 /**
  * Media3/ExoPlayer implementation of [NexusPlayer].
@@ -88,6 +99,8 @@ internal class Media3PlayerImpl @Inject constructor(
     private var currentNexusMediaItem: NexusMediaItem? = null
     private val currentExternalSubtitles = mutableListOf<ExternalSubtitle>()
 
+    override val audioEffectsController: AudioEffectsController = AudioEffectsControllerImpl()
+
     /**
      * The ExoPlayer instance. Created lazily on first [prepare] call
      * to avoid allocating resources before any media is loaded.
@@ -98,6 +111,12 @@ internal class Media3PlayerImpl @Inject constructor(
      * Listener forwarding ExoPlayer events to our [PlayerState] flow.
      */
     private val playerListener = object : Player.Listener {
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                audioEffectsController.attachAudioSession(audioSessionId)
+            }
+        }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateStateFromPlayer()
@@ -552,10 +571,44 @@ internal class Media3PlayerImpl @Inject constructor(
             player.release()
         }
         exoPlayer = null
+        audioEffectsController.release()
         _state.update { PlayerState.INITIAL }
         scope.cancel()
 
         Log.d(TAG, "Player released.")
+    }
+
+    override suspend fun captureFrame(): Bitmap? = withContext(Dispatchers.Main) {
+        val view = attachedPlayerView ?: return@withContext null
+        val surfaceView = view.videoSurfaceView
+        if (surfaceView is SurfaceView) {
+            if (surfaceView.width <= 0 || surfaceView.height <= 0) return@withContext null
+            val bitmap = Bitmap.createBitmap(surfaceView.width, surfaceView.height, Bitmap.Config.ARGB_8888)
+            suspendCancellableCoroutine { continuation ->
+                try {
+                    PixelCopy.request(
+                        surfaceView,
+                        bitmap,
+                        { result ->
+                            if (result == PixelCopy.SUCCESS) {
+                                continuation.resume(bitmap)
+                            } else {
+                                Log.w(TAG, "PixelCopy returned error code: $result")
+                                continuation.resume(null)
+                            }
+                        },
+                        Handler(Looper.getMainLooper())
+                    )
+                } catch (e: Throwable) {
+                    Log.e(TAG, "PixelCopy request failed", e)
+                    continuation.resume(null)
+                }
+            }
+        } else if (surfaceView is TextureView) {
+            surfaceView.bitmap
+        } else {
+            null
+        }
     }
 
     override fun getCurrentPlaybackPosition(): PlaybackPosition? {
