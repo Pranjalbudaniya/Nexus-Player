@@ -151,4 +151,20 @@ class PlayerPreferencesTest {
         repository.setEqualizerPreset("Classical")
         assertEquals("Classical", repository.equalizerPreset.first())
     }
+
+    @Test
+    fun videoScaleMode_defaultIsFit() = runTest(testDispatcher) {
+        val mode = repository.getVideoScaleMode("video_unknown").first()
+        assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Fit, mode)
+    }
+
+    @Test
+    fun videoScaleMode_updatesAndPersistsPerVideo() = runTest(testDispatcher) {
+        repository.setVideoScaleMode("video_1", com.nexus.player.core.playback.model.VideoScaleMode.Crop)
+        repository.setVideoScaleMode("video_2", com.nexus.player.core.playback.model.VideoScaleMode.Stretch)
+
+        assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Crop, repository.getVideoScaleMode("video_1").first())
+        assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Stretch, repository.getVideoScaleMode("video_2").first())
+        assertEquals(com.nexus.player.core.playback.model.VideoScaleMode.Fit, repository.getVideoScaleMode("video_3").first())
+    }
 }

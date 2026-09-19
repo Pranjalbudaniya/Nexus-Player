@@ -17,6 +17,7 @@ import com.nexus.player.core.playback.model.SubtitleBackgroundStyle
 import com.nexus.player.core.playback.model.SubtitlePosition
 import com.nexus.player.core.playback.model.SubtitleTextColor
 import com.nexus.player.core.playback.model.SubtitleTextSize
+import com.nexus.player.core.playback.model.VideoScaleMode
 import com.nexus.player.core.playback.repository.SubtitleRepository
 import com.nexus.player.core.playback.testing.FakeNexusPlayer
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepository
@@ -98,7 +99,7 @@ class PlayerViewModelTest {
         playbackPercentage = playbackPercentage
     )
 
-    private fun createViewModel(savedStateHandle: SavedStateHandle): PlayerViewModel {
+    private fun createViewModel(savedStateHandle: SavedStateHandle = SavedStateHandle()): PlayerViewModel {
         val viewModel = PlayerViewModel(
             savedStateHandle = savedStateHandle,
             videoRepository = fakeVideoRepository,
@@ -1008,6 +1009,165 @@ class PlayerViewModelTest {
         job.cancel()
     }
 
+    @Test
+    fun cycleVideoScaleMode_cyclesThroughAllFiveModesInOrder() = testScope.runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Order: Fit (0) -> Fill (1) -> Crop (2) -> Stretch (3) -> Original (4) -> Fit (0)
+        assertEquals(VideoScaleMode.Fit, fakePlayer.state.value.scaleMode)
+
+        val mode1 = viewModel.cycleVideoScaleMode()
+        assertEquals(VideoScaleMode.Fill, mode1)
+        assertEquals(VideoScaleMode.Fill, fakePlayer.state.value.scaleMode)
+
+        val mode2 = viewModel.cycleVideoScaleMode()
+        assertEquals(VideoScaleMode.Crop, mode2)
+        assertEquals(VideoScaleMode.Crop, fakePlayer.state.value.scaleMode)
+
+        val mode3 = viewModel.cycleVideoScaleMode()
+        assertEquals(VideoScaleMode.Stretch, mode3)
+        assertEquals(VideoScaleMode.Stretch, fakePlayer.state.value.scaleMode)
+
+        val mode4 = viewModel.cycleVideoScaleMode()
+        assertEquals(VideoScaleMode.Original, mode4)
+        assertEquals(VideoScaleMode.Original, fakePlayer.state.value.scaleMode)
+
+        val mode5 = viewModel.cycleVideoScaleMode()
+        assertEquals(VideoScaleMode.Fit, mode5)
+        assertEquals(VideoScaleMode.Fit, fakePlayer.state.value.scaleMode)
+    }
+
+    @Test
+    fun setVideoScaleMode_persistsPerVideoIdAndRestoresOnReopen() = testScope.runTest {
+        val video1 = createSampleVideo(id = "vid_1", title = "Video One")
+        val video2 = createSampleVideo(id = "vid_2", title = "Video Two")
+        fakeVideoRepository.addVideo(video1)
+        fakeVideoRepository.addVideo(video2)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Load video 1 and set mode to Crop
+        viewModel.loadMedia("vid_1")
+        advanceUntilIdle()
+        viewModel.setVideoScaleMode(VideoScaleMode.Crop)
+        advanceUntilIdle()
+        assertEquals(VideoScaleMode.Crop, fakePlayer.state.value.scaleMode)
+
+        // Load video 2 - verify it does NOT inherit video 1's mode, defaults to Fit
+        viewModel.loadMedia("vid_2")
+        advanceUntilIdle()
+        assertEquals(VideoScaleMode.Fit, fakePlayer.state.value.scaleMode)
+
+        // Set video 2 to Stretch
+        viewModel.setVideoScaleMode(VideoScaleMode.Stretch)
+        advanceUntilIdle()
+        assertEquals(VideoScaleMode.Stretch, fakePlayer.state.value.scaleMode)
+
+        // Reopen video 1 - verify previous Crop mode is restored
+        viewModel.loadMedia("vid_1")
+        advanceUntilIdle()
+        assertEquals(VideoScaleMode.Crop, fakePlayer.state.value.scaleMode)
+
+        // Reopen video 2 - verify previous Stretch mode is restored
+        viewModel.loadMedia("vid_2")
+        advanceUntilIdle()
+        assertEquals(VideoScaleMode.Stretch, fakePlayer.state.value.scaleMode)
+    }
+
+    @Test
+    fun onZoomChange_clampsBetweenSensibleLimits() = testScope.runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(1.0f, viewModel.zoom.value)
+
+        // Pinch inward below 1.0f -> clamped to 1.0f
+        viewModel.onZoomChange(0.5f)
+        assertEquals(1.0f, viewModel.zoom.value)
+
+        // Pinch outward to 2.5x -> smooth scaling
+        viewModel.onZoomChange(2.5f)
+        assertEquals(2.5f, viewModel.zoom.value)
+
+        // Pinch outward beyond 4.0x -> clamped to 4.0f (no infinite zoom)
+        viewModel.onZoomChange(2.0f) // 2.5 * 2 = 5.0 -> clamped to 4.0f
+        assertEquals(4.0f, viewModel.zoom.value)
+
+        // Reset zoom
+        viewModel.resetZoom()
+        assertEquals(1.0f, viewModel.zoom.value)
+        assertEquals(0f, viewModel.panOffsetX.value)
+        assertEquals(0f, viewModel.panOffsetY.value)
+    }
+
+    @Test
+    fun onPanChange_whenZoomedIn_clampsToViewportBounds() = testScope.runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Panning when zoom == 1.0 does nothing
+        viewModel.onPanChange(100f, 100f, 1000f, 500f)
+        assertEquals(0f, viewModel.panOffsetX.value)
+        assertEquals(0f, viewModel.panOffsetY.value)
+
+        // Zoom to 2.0x
+        viewModel.onZoomChange(2.0f)
+        assertEquals(2.0f, viewModel.zoom.value)
+
+        // Container: width 1000, height 500
+        // maxPanX = (1000 * (2 - 1)) / 2 = 500
+        // maxPanY = (500 * (2 - 1)) / 2 = 250
+        viewModel.onPanChange(1000f, 500f, 1000f, 500f)
+        assertEquals(500f, viewModel.panOffsetX.value)
+        assertEquals(250f, viewModel.panOffsetY.value)
+
+        // Pan to opposite extreme
+        viewModel.onPanChange(-2000f, -1000f, 1000f, 500f)
+        assertEquals(-500f, viewModel.panOffsetX.value)
+        assertEquals(-250f, viewModel.panOffsetY.value)
+    }
+
+    @Test
+    fun loadMedia_resetsZoomAndPan() = testScope.runTest {
+        val video1 = createSampleVideo(id = "v1")
+        val video2 = createSampleVideo(id = "v2")
+        fakeVideoRepository.addVideo(video1)
+        fakeVideoRepository.addVideo(video2)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.loadMedia("v1")
+        advanceUntilIdle()
+
+        viewModel.onZoomChange(3.0f)
+        viewModel.onPanChange(50f, 50f, 1000f, 500f)
+        assertEquals(3.0f, viewModel.zoom.value)
+
+        // Loading new media resets zoom and pan
+        viewModel.loadMedia("v2")
+        advanceUntilIdle()
+        assertEquals(1.0f, viewModel.zoom.value)
+        assertEquals(0f, viewModel.panOffsetX.value)
+        assertEquals(0f, viewModel.panOffsetY.value)
+    }
+
+    @Test
+    fun changingScaleMode_doesNotResetManualZoom() = testScope.runTest {
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onZoomChange(2.2f)
+        assertEquals(2.2f, viewModel.zoom.value)
+
+        // Cycling scale mode keeps zoom separate and intact
+        viewModel.cycleVideoScaleMode()
+        advanceUntilIdle()
+        assertEquals(2.2f, viewModel.zoom.value)
+    }
+
     // =========================================================================
     // Test Fake VideoRepository
     // =========================================================================
@@ -1159,6 +1319,17 @@ class PlayerViewModelTest {
         override suspend fun addExternalSubtitle(videoId: String, subtitle: ExternalSubtitle) {
             val flow = externalSubtitlesMap.getOrPut(videoId) { MutableStateFlow(emptyList()) }
             flow.value = flow.value + subtitle
+        }
+
+        val scaleModeMap = mutableMapOf<String, MutableStateFlow<VideoScaleMode>>()
+
+        override fun getVideoScaleMode(videoId: String): Flow<VideoScaleMode> {
+            return scaleModeMap.getOrPut(videoId) { MutableStateFlow(VideoScaleMode.Fit) }
+        }
+
+        override suspend fun setVideoScaleMode(videoId: String, mode: VideoScaleMode) {
+            val flow = scaleModeMap.getOrPut(videoId) { MutableStateFlow(VideoScaleMode.Fit) }
+            flow.value = mode
         }
     }
 

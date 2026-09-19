@@ -170,7 +170,8 @@ fun PlayerRoute(
             val durationMs = when (hudState) {
                 is GestureHudState.Screenshot,
                 is GestureHudState.SleepTimer,
-                is GestureHudState.AudioBoost -> 1500L
+                is GestureHudState.AudioBoost,
+                is GestureHudState.ScaleMode -> 1500L
                 else -> 1000L
             }
             kotlinx.coroutines.delay(durationMs)
@@ -343,7 +344,13 @@ fun PlayerRoute(
         onSpeedSelected = { speed -> viewModel.setPlaybackSpeed(speed) },
         onSeekDurationSelected = { sec -> viewModel.setSeekDurationSeconds(sec) },
         onAutoNextToggled = { enabled -> viewModel.setAutoNextEnabled(enabled) },
-        onCycleCropMode = { viewModel.cycleVideoScaleMode() },
+        onCycleCropMode = {
+            val nextMode = viewModel.cycleVideoScaleMode()
+            hudState = GestureHudState.ScaleMode(nextMode)
+        },
+        onZoomChange = { delta -> viewModel.onZoomChange(delta) },
+        onPanChange = { dx, dy, w, h -> viewModel.onPanChange(dx, dy, w, h) },
+        onResetZoom = { viewModel.resetZoom() },
         onToggleOrientationLock = onToggleOrientationLock,
         onDecoderModeSelected = { mode -> viewModel.setDecoderMode(mode) },
         onShareClick = onShareClick,
@@ -403,6 +410,9 @@ fun PlayerScreen(
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
     onCycleCropMode: () -> Unit = {},
+    onZoomChange: (Float) -> Unit = {},
+    onPanChange: (Float, Float, Float, Float) -> Unit = { _, _, _, _ -> },
+    onResetZoom: () -> Unit = {},
     onToggleOrientationLock: () -> Unit = {},
     onToggleOrientation: () -> Unit = {},
     onDecoderModeSelected: (DecoderMode) -> Unit = {},
@@ -450,9 +460,19 @@ fun PlayerScreen(
                     .background(Color.Black)
                     .testTag("player_screen_root")
             ) {
+                val readyState = uiState as? PlayerUiState.Ready
+                val scaleMode = readyState?.scaleMode ?: com.nexus.player.core.playback.model.VideoScaleMode.Fit
+                val zoom = readyState?.zoom ?: 1.0f
+                val panOffsetX = readyState?.panOffsetX ?: 0f
+                val panOffsetY = readyState?.panOffsetY ?: 0f
+
                 // Video Surface (rendered at base)
                 PlayerVideoSurface(
                     player = player,
+                    scaleMode = scaleMode,
+                    zoom = zoom,
+                    panOffsetX = panOffsetX,
+                    panOffsetY = panOffsetY,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -464,6 +484,10 @@ fun PlayerScreen(
                     onBrightnessDelta = onBrightnessDelta,
                     onVolumeDelta = onVolumeDelta,
                     onSpeedBoost = onSpeedBoost,
+                    onZoomChange = onZoomChange,
+                    onPanChange = onPanChange,
+                    onResetZoom = onResetZoom,
+                    isZoomed = zoom > 1.01f,
                     modifier = Modifier.fillMaxSize()
                 )
 

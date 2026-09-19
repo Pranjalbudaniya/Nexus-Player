@@ -45,7 +45,10 @@ sealed interface PlayerUiState {
         val equalizerPreset: String = "Flat",
         val sleepTimerRemainingSeconds: Long? = null,
         val volumePercent: Int = 100,
-        val brightnessPercent: Int = 50
+        val brightnessPercent: Int = 50,
+        val zoom: Float = 1.0f,
+        val panOffsetX: Float = 0f,
+        val panOffsetY: Float = 0f
     ) : PlayerUiState {
         val isBuffering: Boolean
             get() = playbackStatus == PlaybackStatus.Buffering

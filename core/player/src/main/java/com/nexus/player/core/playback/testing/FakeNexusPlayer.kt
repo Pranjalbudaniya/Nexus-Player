@@ -64,11 +64,15 @@ class FakeNexusPlayer : NexusPlayer {
         initialPositions.add(initialPositionMs)
         currentMediaItem = mediaItem
 
-        _state.update {
-            PlayerState(
+        _state.update { current ->
+            current.copy(
                 playbackState = PlaybackStatus.Loading,
+                isPlaying = false,
                 currentMediaId = mediaItem.mediaId,
-                currentPosition = initialPositionMs.coerceAtLeast(0L)
+                currentPosition = initialPositionMs.coerceAtLeast(0L),
+                duration = 0L,
+                bufferedPosition = 0L,
+                error = null
             )
         }
     }

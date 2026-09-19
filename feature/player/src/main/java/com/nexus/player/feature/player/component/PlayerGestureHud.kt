@@ -23,11 +23,17 @@ import androidx.compose.material.icons.automirrored.filled.VolumeMute
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.PhotoSizeSelectActual
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.ZoomOutMap
+import com.nexus.player.core.playback.model.VideoScaleMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +57,7 @@ sealed interface GestureHudState {
     data class Screenshot(val success: Boolean, val message: String = if (success) "Screenshot saved" else "Screenshot failed") : GestureHudState
     data class SleepTimer(val message: String) : GestureHudState
     data class AudioBoost(val percent: Int) : GestureHudState
+    data class ScaleMode(val mode: VideoScaleMode) : GestureHudState
 }
 
 /**
@@ -330,6 +337,47 @@ fun PlayerGestureHud(
                         Text(
                             text = "Audio Boost: ${hudState.percent}%",
                             style = MaterialTheme.typography.titleSmall
+                        )
+                    }
+                }
+            }
+        }
+
+        // Scale / Display Mode Feedback HUD (Center)
+        AnimatedVisibility(
+            visible = hudState is GestureHudState.ScaleMode,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            if (hudState is GestureHudState.ScaleMode) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        val icon = when (hudState.mode) {
+                            VideoScaleMode.Fit -> Icons.Filled.AspectRatio
+                            VideoScaleMode.Fill -> Icons.Filled.FitScreen
+                            VideoScaleMode.Crop -> Icons.Filled.Crop
+                            VideoScaleMode.Stretch -> Icons.Filled.ZoomOutMap
+                            VideoScaleMode.Original -> Icons.Filled.PhotoSizeSelectActual
+                        }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = hudState.mode.label,
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
                 }

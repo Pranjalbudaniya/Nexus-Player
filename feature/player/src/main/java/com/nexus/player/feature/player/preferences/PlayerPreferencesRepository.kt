@@ -16,6 +16,7 @@ import com.nexus.player.core.playback.model.SubtitleBackgroundStyle
 import com.nexus.player.core.playback.model.SubtitlePosition
 import com.nexus.player.core.playback.model.SubtitleTextColor
 import com.nexus.player.core.playback.model.SubtitleTextSize
+import com.nexus.player.core.playback.model.VideoScaleMode
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -65,6 +66,9 @@ interface PlayerPreferencesRepository {
 
     fun getExternalSubtitles(videoId: String): Flow<List<ExternalSubtitle>>
     suspend fun addExternalSubtitle(videoId: String, subtitle: ExternalSubtitle)
+
+    fun getVideoScaleMode(videoId: String): Flow<VideoScaleMode>
+    suspend fun setVideoScaleMode(videoId: String, mode: VideoScaleMode)
 }
 
 @Singleton
@@ -290,6 +294,26 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
                 current.add(subtitle)
             }
             prefs[key] = serializeExternalSubtitles(current)
+        }
+    }
+
+    override fun getVideoScaleMode(videoId: String): Flow<VideoScaleMode> = safePreferences
+        .map { prefs ->
+            val modeStr = prefs[stringPreferencesKey("key_scale_mode_$videoId")]
+            if (modeStr != null) {
+                try {
+                    VideoScaleMode.valueOf(modeStr)
+                } catch (_: Exception) {
+                    VideoScaleMode.Fit
+                }
+            } else {
+                VideoScaleMode.Fit
+            }
+        }
+
+    override suspend fun setVideoScaleMode(videoId: String, mode: VideoScaleMode) {
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey("key_scale_mode_$videoId")] = mode.name
         }
     }
 

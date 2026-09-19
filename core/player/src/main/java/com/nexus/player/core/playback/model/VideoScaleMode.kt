@@ -17,9 +17,9 @@ enum class VideoScaleMode(
 ) {
     Fit(id = 0, label = "Fit", resizeMode = 0),         // RESIZE_MODE_FIT
     Fill(id = 1, label = "Fill", resizeMode = 4),       // RESIZE_MODE_ZOOM
-    Crop(id = 2, label = "Crop", resizeMode = 4),       // RESIZE_MODE_ZOOM
+    Crop(id = 2, label = "Crop", resizeMode = 0),       // RESIZE_MODE_FIT with central crop zoom
     Stretch(id = 3, label = "Stretch", resizeMode = 3), // RESIZE_MODE_FILL
-    Original(id = 4, label = "Original", resizeMode = 0); // RESIZE_MODE_FIT
+    Original(id = 4, label = "Original", resizeMode = 0); // RESIZE_MODE_FIT with 1:1 native pixel presentation
 
     fun next(): VideoScaleMode = entries[(ordinal + 1) % entries.size]
 

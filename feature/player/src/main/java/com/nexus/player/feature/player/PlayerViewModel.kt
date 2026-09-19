@@ -172,6 +172,15 @@ class PlayerViewModel internal constructor(
     private val _brightnessPercent = MutableStateFlow(50)
     val brightnessPercent: StateFlow<Int> = _brightnessPercent.asStateFlow()
 
+    private val _zoom = MutableStateFlow(1.0f)
+    val zoom: StateFlow<Float> = _zoom.asStateFlow()
+
+    private val _panOffsetX = MutableStateFlow(0f)
+    val panOffsetX: StateFlow<Float> = _panOffsetX.asStateFlow()
+
+    private val _panOffsetY = MutableStateFlow(0f)
+    val panOffsetY: StateFlow<Float> = _panOffsetY.asStateFlow()
+
     private val _playerEvents = MutableSharedFlow<PlayerEvent>(extraBufferCapacity = 8)
     val playerEvents: SharedFlow<PlayerEvent> = _playerEvents.asSharedFlow()
 
@@ -187,7 +196,10 @@ class PlayerViewModel internal constructor(
         val equalizerPreset: String,
         val sleepTimerRemainingSeconds: Long?,
         val volumePercent: Int,
-        val brightnessPercent: Int
+        val brightnessPercent: Int,
+        val zoom: Float,
+        val panOffsetX: Float,
+        val panOffsetY: Float
     )
 
     private data class SettingsAndUtilitiesFlags(
@@ -198,7 +210,10 @@ class PlayerViewModel internal constructor(
         val eqPreset: String,
         val sleepTimer: Long?,
         val volume: Int,
-        val brightness: Int
+        val brightness: Int,
+        val zoom: Float,
+        val panOffsetX: Float,
+        val panOffsetY: Float
     )
 
     private val _settingsAndUtilitiesFlags = combine(
@@ -210,8 +225,11 @@ class PlayerViewModel internal constructor(
         },
         combine(_volumePercent, _brightnessPercent) { vol, bright ->
             vol to bright
+        },
+        combine(_zoom, _panOffsetX, _panOffsetY) { z, px, py ->
+            Triple(z, px, py)
         }
-    ) { (seek, autoNext, boost), (eqEnabled, eqPreset, timer), (vol, bright) ->
+    ) { (seek, autoNext, boost), (eqEnabled, eqPreset, timer), (vol, bright), (z, px, py) ->
         SettingsAndUtilitiesFlags(
             seekDuration = seek,
             autoNext = autoNext,
@@ -220,7 +238,10 @@ class PlayerViewModel internal constructor(
             eqPreset = eqPreset,
             sleepTimer = timer,
             volume = vol,
-            brightness = bright
+            brightness = bright,
+            zoom = z,
+            panOffsetX = px,
+            panOffsetY = py
         )
     }
 
@@ -243,7 +264,10 @@ class PlayerViewModel internal constructor(
             equalizerPreset = extra.eqPreset,
             sleepTimerRemainingSeconds = extra.sleepTimer,
             volumePercent = extra.volume,
-            brightnessPercent = extra.brightness
+            brightnessPercent = extra.brightness,
+            zoom = extra.zoom,
+            panOffsetX = extra.panOffsetX,
+            panOffsetY = extra.panOffsetY
         )
     }
 
@@ -306,7 +330,10 @@ class PlayerViewModel internal constructor(
                     equalizerPreset = flags.equalizerPreset,
                     sleepTimerRemainingSeconds = flags.sleepTimerRemainingSeconds,
                     volumePercent = flags.volumePercent,
-                    brightnessPercent = flags.brightnessPercent
+                    brightnessPercent = flags.brightnessPercent,
+                    zoom = flags.zoom,
+                    panOffsetX = flags.panOffsetX,
+                    panOffsetY = flags.panOffsetY
                 )
             }
         }
@@ -330,8 +357,10 @@ class PlayerViewModel internal constructor(
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.resizeMode.first().let { mode ->
-                player.setVideoResizeMode(mode)
+            if (currentLoadedId == null) {
+                playerPreferencesRepository.resizeMode.first().let { mode ->
+                    player.setVideoResizeMode(mode)
+                }
             }
         }
         viewModelScope.launch {
@@ -423,7 +452,11 @@ class PlayerViewModel internal constructor(
         _customError.value = null
         hasMarkedCompletedForSession = false
         lastPersistWallTimeMs = timeProvider()
+        resetZoom()
         viewModelScope.launch {
+            val savedScaleMode = playerPreferencesRepository.getVideoScaleMode(id).first()
+            player.setVideoScaleMode(savedScaleMode)
+
             val savedExternalSubs = withContext(ioDispatcher) {
                 playerPreferencesRepository.getExternalSubtitles(id).first()
             }
@@ -570,14 +603,53 @@ class PlayerViewModel internal constructor(
         seekRelative(direction * stepSec)
     }
 
+    fun onZoomChange(zoomDelta: Float) {
+        val current = _zoom.value
+        val newZoom = (current * zoomDelta).coerceIn(1.0f, 4.0f)
+        _zoom.value = newZoom
+        if (newZoom <= 1.01f) {
+            _panOffsetX.value = 0f
+            _panOffsetY.value = 0f
+        }
+    }
+
+    fun onPanChange(panDeltaX: Float, panDeltaY: Float, containerWidth: Float = 0f, containerHeight: Float = 0f) {
+        val currentZoom = _zoom.value
+        if (currentZoom > 1.01f) {
+            val newX = _panOffsetX.value + panDeltaX
+            val newY = _panOffsetY.value + panDeltaY
+            if (containerWidth > 0f && containerHeight > 0f) {
+                val maxPanX = (containerWidth * (currentZoom - 1f)) / 2f
+                val maxPanY = (containerHeight * (currentZoom - 1f)) / 2f
+                _panOffsetX.value = newX.coerceIn(-maxPanX, maxPanX)
+                _panOffsetY.value = newY.coerceIn(-maxPanY, maxPanY)
+            } else {
+                _panOffsetX.value = newX
+                _panOffsetY.value = newY
+            }
+        }
+    }
+
+    fun resetZoom() {
+        _zoom.value = 1.0f
+        _panOffsetX.value = 0f
+        _panOffsetY.value = 0f
+    }
+
     fun cycleVideoScaleMode(): VideoScaleMode {
         val nextMode = player.state.value.scaleMode.next()
-        player.setVideoScaleMode(nextMode)
+        setVideoScaleMode(nextMode)
         return nextMode
     }
 
     fun setVideoScaleMode(mode: VideoScaleMode) {
         player.setVideoScaleMode(mode)
+        val id = currentLoadedId
+        if (!id.isNullOrBlank()) {
+            viewModelScope.launch {
+                playerPreferencesRepository.setVideoScaleMode(id, mode)
+            }
+        }
     }
 
     fun selectAudioTrack(trackId: String) {
