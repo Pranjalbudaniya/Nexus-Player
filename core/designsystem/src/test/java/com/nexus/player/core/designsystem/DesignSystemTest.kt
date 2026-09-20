@@ -2,6 +2,7 @@ package com.nexus.player.core.designsystem
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.nexus.player.core.designsystem.theme.NexusAccentColor
 import com.nexus.player.core.designsystem.theme.NexusColorSchemes
 import com.nexus.player.core.designsystem.theme.NexusDimensions
 import com.nexus.player.core.designsystem.theme.NexusMotion
@@ -9,6 +10,8 @@ import com.nexus.player.core.designsystem.theme.NexusSpacing
 import com.nexus.player.core.designsystem.theme.NexusThemeMode
 import com.nexus.player.core.designsystem.theme.ThemeConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -63,9 +66,32 @@ class DesignSystemTest {
     }
 
     @Test
-    fun themeConfig_defaultIsSystemWithDynamicColor() {
+    fun themeConfig_defaultIsSystemWithDynamicColorAndDefaultAccent() {
         val config = ThemeConfig()
         assertEquals(NexusThemeMode.SYSTEM, config.themeMode)
+        assertFalse(config.isAmoled)
         assertTrue(config.dynamicColor)
+        assertEquals(NexusAccentColor.DEFAULT, config.accentColor)
+    }
+
+    @Test
+    fun customAccents_generateValidLightAndDarkColorSchemes() {
+        for (accent in NexusAccentColor.values()) {
+            val lightScheme = NexusColorSchemes.fromAccent(accent, isDark = false, isAmoled = false)
+            assertNotNull(lightScheme)
+            assertEquals(accent.lightPrimary, lightScheme.primary)
+            assertEquals(accent.lightOnPrimary, lightScheme.onPrimary)
+
+            val darkScheme = NexusColorSchemes.fromAccent(accent, isDark = true, isAmoled = false)
+            assertNotNull(darkScheme)
+            assertEquals(accent.darkPrimary, darkScheme.primary)
+            assertEquals(accent.darkOnPrimary, darkScheme.onPrimary)
+
+            val amoledScheme = NexusColorSchemes.fromAccent(accent, isDark = true, isAmoled = true)
+            assertNotNull(amoledScheme)
+            assertEquals(Color.Black, amoledScheme.background)
+            assertEquals(Color.Black, amoledScheme.surface)
+            assertEquals(accent.darkPrimary, amoledScheme.primary)
+        }
     }
 }

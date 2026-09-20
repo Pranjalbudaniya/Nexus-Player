@@ -3,6 +3,7 @@ package com.nexus.player.core.common.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
@@ -78,7 +79,9 @@ class SettingsRepositoryTest {
         assertEquals(ScanBehavior.AUTOMATIC, settings.library.scanBehavior)
 
         assertEquals(ThemeMode.SYSTEM, settings.appearance.themeMode)
+        assertFalse(settings.appearance.useAmoledMode)
         assertTrue(settings.appearance.useDynamicColor)
+        assertEquals(AccentColor.DEFAULT, settings.appearance.accentColor)
     }
 
     @Test
@@ -115,14 +118,18 @@ class SettingsRepositoryTest {
         repository.setDefaultSortOption(LibrarySort.TITLE_ASC)
         repository.setScanBehavior(ScanBehavior.MANUAL)
         repository.setThemeMode(ThemeMode.DARK)
+        repository.setAmoledMode(true)
         repository.setDynamicColor(false)
+        repository.setAccentColor(AccentColor.EMERALD)
 
         val updated = repository.settings.first()
         assertEquals(LibraryLayout.LIST, updated.library.defaultLayoutMode)
         assertEquals(LibrarySort.TITLE_ASC, updated.library.defaultSortOption)
         assertEquals(ScanBehavior.MANUAL, updated.library.scanBehavior)
         assertEquals(ThemeMode.DARK, updated.appearance.themeMode)
+        assertTrue(updated.appearance.useAmoledMode)
         assertFalse(updated.appearance.useDynamicColor)
+        assertEquals(AccentColor.EMERALD, updated.appearance.accentColor)
     }
 
     @Test

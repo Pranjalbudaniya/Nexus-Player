@@ -104,12 +104,28 @@ data class LibrarySettings(
 )
 
 /**
+ * Curated custom accent color palette options.
+ */
+enum class AccentColor(val label: String) {
+    DEFAULT("Default (System)"),
+    BLUE("Ocean Blue"),
+    TEAL("Teal Cyan"),
+    EMERALD("Emerald Green"),
+    AMBER("Warm Amber"),
+    ROSE("Rose Red"),
+    PURPLE("Deep Purple")
+}
+
+/**
  * Appearance and theme configuration.
  */
 data class AppearanceSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val useDynamicColor: Boolean = true
+    val useAmoledMode: Boolean = false,
+    val useDynamicColor: Boolean = true,
+    val accentColor: AccentColor = AccentColor.DEFAULT
 )
+
 
 /**
  * Audio output and passthrough configuration.

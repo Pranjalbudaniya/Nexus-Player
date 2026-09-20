@@ -1,6 +1,7 @@
 package com.nexus.player.feature.more.settings
 
 import com.nexus.player.core.common.settings.SettingsRepository
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.NexusSettings
@@ -142,6 +143,26 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun updateAppearanceSettings_delegatesToRepository() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.setThemeMode(ThemeMode.DARK)
+        viewModel.setAmoledMode(true)
+        viewModel.setDynamicColor(false)
+        viewModel.setAccentColor(AccentColor.ROSE)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(ThemeMode.DARK, state.settings.appearance.themeMode)
+        assertTrue(state.settings.appearance.useAmoledMode)
+        assertFalse(state.settings.appearance.useDynamicColor)
+        assertEquals(AccentColor.ROSE, state.settings.appearance.accentColor)
+    }
+
+    @Test
     fun clearAnalytics_triggersRepositoryResetAndShowsMessage() = testScope.runTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -260,9 +281,21 @@ class SettingsViewModelTest {
             )
         }
 
+        override suspend fun setAmoledMode(enabled: Boolean) {
+            _settings.value = _settings.value.copy(
+                appearance = _settings.value.appearance.copy(useAmoledMode = enabled)
+            )
+        }
+
         override suspend fun setDynamicColor(enabled: Boolean) {
             _settings.value = _settings.value.copy(
                 appearance = _settings.value.appearance.copy(useDynamicColor = enabled)
+            )
+        }
+
+        override suspend fun setAccentColor(accent: AccentColor) {
+            _settings.value = _settings.value.copy(
+                appearance = _settings.value.appearance.copy(accentColor = accent)
             )
         }
 

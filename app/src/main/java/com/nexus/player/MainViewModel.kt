@@ -2,7 +2,13 @@ package com.nexus.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.player.core.common.settings.SettingsRepository
+import com.nexus.player.core.common.settings.model.AccentColor
+import com.nexus.player.core.common.settings.model.ThemeMode
 import com.nexus.player.core.common.storage.StorageAccessRepository
+import com.nexus.player.core.designsystem.theme.NexusAccentColor
+import com.nexus.player.core.designsystem.theme.NexusThemeMode
+import com.nexus.player.core.designsystem.theme.ThemeConfig
 import com.nexus.player.core.navigation.HomeRoute
 import com.nexus.player.core.navigation.NexusRoute
 import com.nexus.player.core.navigation.OnboardingRoute
@@ -23,7 +29,8 @@ sealed interface AppLaunchState {
 @HiltViewModel
 class MainViewModel @Inject constructor(
     storageAccessRepository: StorageAccessRepository,
-    private val mediaScanOrchestrator: MediaScanOrchestrator
+    private val mediaScanOrchestrator: MediaScanOrchestrator,
+    settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     init {
@@ -35,6 +42,35 @@ class MainViewModel @Inject constructor(
             }
         }
     }
+
+    val themeConfig: StateFlow<ThemeConfig> = settingsRepository.settings
+        .map { settings ->
+            val appearance = settings.appearance
+            ThemeConfig(
+                themeMode = when (appearance.themeMode) {
+                    ThemeMode.SYSTEM -> NexusThemeMode.SYSTEM
+                    ThemeMode.LIGHT -> NexusThemeMode.LIGHT
+                    ThemeMode.DARK -> NexusThemeMode.DARK
+                },
+                isAmoled = appearance.useAmoledMode,
+                dynamicColor = appearance.useDynamicColor,
+                accentColor = when (appearance.accentColor) {
+                    AccentColor.DEFAULT -> NexusAccentColor.DEFAULT
+                    AccentColor.BLUE -> NexusAccentColor.BLUE
+                    AccentColor.TEAL -> NexusAccentColor.TEAL
+                    AccentColor.EMERALD -> NexusAccentColor.EMERALD
+                    AccentColor.AMBER -> NexusAccentColor.AMBER
+                    AccentColor.ROSE -> NexusAccentColor.ROSE
+                    AccentColor.PURPLE -> NexusAccentColor.PURPLE
+                }
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ThemeConfig()
+        )
+
 
     val appLaunchState: StateFlow<AppLaunchState> = storageAccessRepository.storageAccessState
         .map { accessState ->

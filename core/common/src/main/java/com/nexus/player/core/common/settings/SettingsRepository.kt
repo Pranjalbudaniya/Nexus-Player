@@ -1,5 +1,6 @@
 package com.nexus.player.core.common.settings
 
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.NexusSettings
@@ -45,7 +46,10 @@ interface SettingsRepository {
 
     // --- Appearance Section ---
     suspend fun setThemeMode(mode: ThemeMode)
+    suspend fun setAmoledMode(enabled: Boolean)
     suspend fun setDynamicColor(enabled: Boolean)
+    suspend fun setAccentColor(accent: AccentColor)
+
 
     // --- Audio Section ---
     suspend fun setPreferredAudioLanguage(language: String)

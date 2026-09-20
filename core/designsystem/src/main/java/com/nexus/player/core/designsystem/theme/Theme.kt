@@ -19,14 +19,16 @@ enum class NexusThemeMode {
 }
 
 /**
- * Theme configuration model designed for clean integration with future
+ * Theme configuration model designed for clean integration with
  * Appearance Settings and persistence without individual screens needing
  * to know how colors, tokens, or schemes are constructed.
  */
 @Immutable
 data class ThemeConfig(
     val themeMode: NexusThemeMode = NexusThemeMode.SYSTEM,
-    val dynamicColor: Boolean = true
+    val isAmoled: Boolean = false,
+    val dynamicColor: Boolean = true,
+    val accentColor: NexusAccentColor = NexusAccentColor.DEFAULT
 )
 
 /**
@@ -45,29 +47,11 @@ fun NexusTheme(
     val context = LocalContext.current
     val systemInDark = isSystemInDarkTheme()
 
-    val isDark = when (themeConfig.themeMode) {
-        NexusThemeMode.SYSTEM -> systemInDark
-        NexusThemeMode.LIGHT -> false
-        NexusThemeMode.DARK -> true
-        NexusThemeMode.AMOLED -> true
-    }
-
-    val isAmoled = themeConfig.themeMode == NexusThemeMode.AMOLED
-
-    val colorScheme = if (themeConfig.dynamicColor) {
-        NexusColorSchemes.dynamic(
-            context = context,
-            isDark = isDark,
-            isAmoled = isAmoled
-        )
-    } else {
-        if (isDark) {
-            if (isAmoled) NexusColorSchemes.amoled(NexusColorSchemes.dark())
-            else NexusColorSchemes.dark()
-        } else {
-            NexusColorSchemes.light()
-        }
-    }
+    val colorScheme = NexusColorSchemes.forConfig(
+        context = context,
+        config = themeConfig,
+        systemInDark = systemInDark
+    )
 
     val spacing = NexusSpacing()
     val dimensions = NexusDimensions()
@@ -97,11 +81,18 @@ fun NexusTheme(
 @Composable
 fun NexusTheme(
     themeMode: NexusThemeMode = NexusThemeMode.SYSTEM,
+    isAmoled: Boolean = false,
     dynamicColor: Boolean = true,
+    accentColor: NexusAccentColor = NexusAccentColor.DEFAULT,
     content: @Composable () -> Unit
 ) {
     NexusTheme(
-        themeConfig = ThemeConfig(themeMode = themeMode, dynamicColor = dynamicColor),
+        themeConfig = ThemeConfig(
+            themeMode = themeMode,
+            isAmoled = isAmoled,
+            dynamicColor = dynamicColor,
+            accentColor = accentColor
+        ),
         content = content
     )
 }

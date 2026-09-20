@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nexus.player.core.common.network.Dispatcher
 import com.nexus.player.core.common.network.NexusDispatchers
 import com.nexus.player.core.common.settings.model.AboutSettings
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.AdvancedSettings
 import com.nexus.player.core.common.settings.model.AppearanceSettings
 import com.nexus.player.core.common.settings.model.AudioSettings
@@ -75,7 +76,9 @@ class SettingsRepositoryImpl @Inject constructor(
 
         // Appearance
         val THEME_MODE = stringPreferencesKey("key_appearance_theme_mode")
+        val AMOLED_MODE = booleanPreferencesKey("key_appearance_amoled_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("key_appearance_dynamic_color")
+        val ACCENT_COLOR = stringPreferencesKey("key_appearance_accent_color")
 
         // Audio
         val PREFERRED_AUDIO_LANG = stringPreferencesKey("key_player_preferred_audio_lang")
@@ -140,7 +143,9 @@ class SettingsRepositoryImpl @Inject constructor(
         // 5. Appearance
         val appearance = AppearanceSettings(
             themeMode = parseEnum(this[Keys.THEME_MODE], ThemeMode.SYSTEM),
-            useDynamicColor = this[Keys.DYNAMIC_COLOR] ?: true
+            useAmoledMode = this[Keys.AMOLED_MODE] ?: false,
+            useDynamicColor = this[Keys.DYNAMIC_COLOR] ?: true,
+            accentColor = parseEnum(this[Keys.ACCENT_COLOR], AccentColor.DEFAULT)
         )
 
         // 6. Audio
@@ -285,9 +290,21 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setAmoledMode(enabled: Boolean) {
+        withContext(ioDispatcher) {
+            dataStore.edit { it[Keys.AMOLED_MODE] = enabled }
+        }
+    }
+
     override suspend fun setDynamicColor(enabled: Boolean) {
         withContext(ioDispatcher) {
             dataStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
+        }
+    }
+
+    override suspend fun setAccentColor(accent: AccentColor) {
+        withContext(ioDispatcher) {
+            dataStore.edit { it[Keys.ACCENT_COLOR] = accent.name }
         }
     }
 

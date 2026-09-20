@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.player.core.common.network.Dispatcher
 import com.nexus.player.core.common.network.NexusDispatchers
 import com.nexus.player.core.common.settings.SettingsRepository
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
@@ -156,9 +157,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setAmoledMode(enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            settingsRepository.setAmoledMode(enabled)
+        }
+    }
+
     fun setDynamicColor(enabled: Boolean) {
         viewModelScope.launch(ioDispatcher) {
             settingsRepository.setDynamicColor(enabled)
+        }
+    }
+
+    fun setAccentColor(accent: AccentColor) {
+        viewModelScope.launch(ioDispatcher) {
+            settingsRepository.setAccentColor(accent)
         }
     }
 

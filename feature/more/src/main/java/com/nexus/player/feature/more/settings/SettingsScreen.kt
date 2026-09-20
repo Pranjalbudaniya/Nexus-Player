@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nexus.player.core.common.settings.model.AccentColor
 import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
@@ -49,6 +50,7 @@ import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.VerticalSpacer
 import com.nexus.player.feature.more.analytics.component.ClearAnalyticsDialog
+import com.nexus.player.feature.more.settings.component.AccentColorPicker
 import com.nexus.player.feature.more.settings.component.SettingActionRow
 import com.nexus.player.feature.more.settings.component.SettingInfoRow
 import com.nexus.player.feature.more.settings.component.SettingSectionCard
@@ -100,7 +102,9 @@ fun SettingsRoute(
         onSetDefaultSortOption = viewModel::setDefaultSortOption,
         onSetScanBehavior = viewModel::setScanBehavior,
         onSetThemeMode = viewModel::setThemeMode,
+        onSetAmoledMode = viewModel::setAmoledMode,
         onSetDynamicColor = viewModel::setDynamicColor,
+        onSetAccentColor = viewModel::setAccentColor,
         onSetPreferredAudioLanguage = viewModel::setPreferredAudioLanguage,
         onSetAudioBoostEnabled = viewModel::setAudioBoostEnabled,
         onSetAudioDelayMs = viewModel::setAudioDelayMs,
@@ -135,7 +139,9 @@ fun SettingsScreen(
     onSetDefaultSortOption: (LibrarySort) -> Unit,
     onSetScanBehavior: (ScanBehavior) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
+    onSetAmoledMode: (Boolean) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
+    onSetAccentColor: (AccentColor) -> Unit,
     onSetPreferredAudioLanguage: (String) -> Unit,
     onSetAudioBoostEnabled: (Boolean) -> Unit,
     onSetAudioDelayMs: (Long) -> Unit,
@@ -335,10 +341,25 @@ fun SettingsScreen(
                         description = "Switch between dark, light, or system themes"
                     )
                     SettingSwitchRow(
-                        title = "Dynamic Colors",
+                        title = "AMOLED True Black",
+                        checked = uiState.settings.appearance.useAmoledMode,
+                        onCheckedChange = onSetAmoledMode,
+                        enabled = uiState.settings.appearance.themeMode != ThemeMode.LIGHT,
+                        description = "Pitch-black canvas for OLED power savings and deep contrast in dark mode"
+                    )
+                    SettingSwitchRow(
+                        title = "Dynamic Material You Colors",
                         checked = uiState.settings.appearance.useDynamicColor,
                         onCheckedChange = onSetDynamicColor,
-                        description = "Derive accent palette from device wallpaper (Material You)"
+                        description = if (uiState.settings.appearance.accentColor != AccentColor.DEFAULT) {
+                            "Overridden by custom accent color below"
+                        } else {
+                            "Derive accent palette from device wallpaper on supported Android 12+ devices"
+                        }
+                    )
+                    AccentColorPicker(
+                        selectedAccent = uiState.settings.appearance.accentColor,
+                        onAccentSelected = onSetAccentColor
                     )
                 }
             }
