@@ -169,6 +169,10 @@ class VideoRepositoryImpl @Inject constructor(
         videoDao.clearAllHistory()
     }
 
+    override suspend fun clearAllAnalyticsAndHistory() = withContext(ioDispatcher) {
+        videoDao.clearAllAnalyticsAndHistory()
+    }
+
     override suspend fun setFavorite(id: String, isFavorite: Boolean) = withContext(ioDispatcher) {
         videoDao.updateFavorite(id, isFavorite)
     }

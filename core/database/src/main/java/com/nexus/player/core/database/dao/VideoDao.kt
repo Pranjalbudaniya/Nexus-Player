@@ -236,6 +236,17 @@ interface VideoDao {
     """)
     suspend fun clearAllHistory()
 
+    @Query("""
+        UPDATE videos 
+        SET lastPlayedAt = NULL, 
+            playbackPositionMs = 0, 
+            playbackPercentage = 0.0, 
+            isCompleted = 0,
+            watchCount = 0 
+        WHERE lastPlayedAt IS NOT NULL OR watchCount > 0 OR playbackPositionMs > 0
+    """)
+    suspend fun clearAllAnalyticsAndHistory()
+
     @Query("UPDATE videos SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavorite(id: String, isFavorite: Boolean)
 

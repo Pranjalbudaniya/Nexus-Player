@@ -470,4 +470,34 @@ class VideoDaoTest {
         assertTrue(videoDao.getContinueWatchingVideos().first().isEmpty())
         assertEquals(3, videoDao.getVideosCount())
     }
+
+    @Test
+    fun clearAllAnalyticsAndHistoryResetsWatchCountsAndHistory() = runTest {
+        videoDao.upsertVideos(
+            listOf(
+                createSampleVideo(id = "1", mediaUri = "u1", lastPlayedAt = 1000L, playbackPositionMs = 500L, watchCount = 3),
+                createSampleVideo(id = "2", mediaUri = "u2", lastPlayedAt = 2000L, isCompleted = true, watchCount = 5),
+                createSampleVideo(id = "3", mediaUri = "u3", lastPlayedAt = null, watchCount = 0)
+            )
+        )
+
+        assertEquals(2, videoDao.getAllHistoryVideos().first().size)
+
+        videoDao.clearAllAnalyticsAndHistory()
+
+        assertTrue(videoDao.getAllHistoryVideos().first().isEmpty())
+        assertTrue(videoDao.getContinueWatchingVideos().first().isEmpty())
+        assertEquals(3, videoDao.getVideosCount())
+
+        val v1 = videoDao.getVideoById("1")
+        assertNotNull(v1)
+        assertEquals(0, v1?.watchCount)
+        assertNull(v1?.lastPlayedAt)
+        assertEquals(0L, v1?.playbackPositionMs)
+
+        val v2 = videoDao.getVideoById("2")
+        assertNotNull(v2)
+        assertEquals(0, v2?.watchCount)
+        assertFalse(v2?.isCompleted ?: true)
+    }
 }

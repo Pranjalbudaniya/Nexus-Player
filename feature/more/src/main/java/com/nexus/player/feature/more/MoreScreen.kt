@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
@@ -68,6 +69,7 @@ import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 fun MoreRoute(
     onNavigateToPlayer: (String) -> Unit,
     onNavigateToHistory: () -> Unit,
+    onNavigateToAnalytics: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onFolderClick: (folderPath: String, folderName: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -90,6 +92,7 @@ fun MoreRoute(
             onNavigateToPlayer(videoId)
         },
         onNavigateToHistory = onNavigateToHistory,
+        onNavigateToAnalytics = onNavigateToAnalytics,
         onNavigateToSettings = onNavigateToSettings,
         onClearItem = { videoId -> viewModel.clearHistoryItem(videoId) },
         onClearAllClick = { viewModel.setClearAllDialogOpen(true) },
@@ -127,6 +130,7 @@ fun MoreScreen(
     thumbnailLoader: ThumbnailLoader?,
     onNavigateToPlayer: (String) -> Unit,
     onNavigateToHistory: () -> Unit,
+    onNavigateToAnalytics: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onClearItem: (String) -> Unit,
     onClearAllClick: () -> Unit,
@@ -212,7 +216,10 @@ fun MoreScreen(
                 ) {
                     // 1. Playback Overview Card
                     item(key = "stats_card") {
-                        WatchStatsCard(stats = uiState.stats)
+                        WatchStatsCard(
+                            stats = uiState.stats,
+                            onAnalyticsClick = onNavigateToAnalytics
+                        )
                     }
 
                     // 2. Playback History Section Header
@@ -333,6 +340,15 @@ fun MoreScreen(
                         )
                     }
 
+                    item(key = "nav_analytics") {
+                        MoreNavRow(
+                            icon = Icons.Default.Analytics,
+                            title = "Playback Analytics",
+                            subtitle = "Watch time, completion rates, and format trends",
+                            onClick = onNavigateToAnalytics
+                        )
+                    }
+
                     item(key = "nav_settings") {
                         MoreNavRow(
                             icon = Icons.Default.Settings,
@@ -384,49 +400,95 @@ fun MoreScreen(
 @Composable
 private fun WatchStatsCard(
     stats: WatchStats,
+    onAnalyticsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
     val shapes = NexusTheme.customShapes
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "View detailed playback analytics",
+                onClick = onAnalyticsClick
+            ),
         shape = shapes.card,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(spacing.medium),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            StatItem(
-                icon = Icons.Default.History,
-                value = stats.totalWatched.toString(),
-                label = "Watched",
-                iconTint = MaterialTheme.colorScheme.primary
-            )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(spacing.medium),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatItem(
+                    icon = Icons.Default.History,
+                    value = stats.totalWatched.toString(),
+                    label = "Watched",
+                    iconTint = MaterialTheme.colorScheme.primary
+                )
 
-            StatDivider()
+                StatDivider()
 
-            StatItem(
-                icon = Icons.Default.CheckCircle,
-                value = stats.completedCount.toString(),
-                label = "Completed",
-                iconTint = MaterialTheme.colorScheme.secondary
-            )
+                StatItem(
+                    icon = Icons.Default.CheckCircle,
+                    value = stats.completedCount.toString(),
+                    label = "Completed",
+                    iconTint = MaterialTheme.colorScheme.secondary
+                )
 
-            StatDivider()
+                StatDivider()
 
-            StatItem(
-                icon = Icons.Default.Favorite,
-                value = stats.favoritesCount.toString(),
-                label = "Favorites",
-                iconTint = MaterialTheme.colorScheme.tertiary
-            )
+                StatItem(
+                    icon = Icons.Default.Favorite,
+                    value = stats.favoritesCount.toString(),
+                    label = "Favorites",
+                    iconTint = MaterialTheme.colorScheme.tertiary
+                )
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = spacing.medium, vertical = spacing.small),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        HorizontalSpacer(spacing.small)
+                        Text(
+                            text = "View Detailed Watch Analytics",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
         }
     }
 }

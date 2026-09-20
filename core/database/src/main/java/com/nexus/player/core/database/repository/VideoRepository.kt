@@ -142,6 +142,12 @@ interface VideoRepository {
     suspend fun clearAllHistory() {}
 
     /**
+     * Clear all playback history and watch statistics. Resets playback position, percentage, completion status,
+     * and watch count for all played videos.
+     */
+    suspend fun clearAllAnalyticsAndHistory() {}
+
+    /**
      * Toggle or set favorite state.
      */
     suspend fun setFavorite(id: String, isFavorite: Boolean)
