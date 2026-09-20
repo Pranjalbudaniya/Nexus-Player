@@ -56,6 +56,11 @@ interface VideoRepository {
     fun getHistoryVideos(limit: Int = 20): Flow<List<Video>>
 
     /**
+     * Observe all playback history.
+     */
+    fun getAllHistoryVideos(): Flow<List<Video>> = getHistoryVideos(limit = 1000)
+
+    /**
      * Observe videos within a specific [folderPath].
      */
     fun getVideosByFolder(folderPath: String): Flow<List<Video>>
@@ -103,7 +108,38 @@ interface VideoRepository {
         positionMs: Long,
         percentage: Float,
         lastPlayedAt: Long
-    )
+    ) {
+        updatePlaybackProgress(id, positionMs, percentage, lastPlayedAt, false)
+    }
+
+    /**
+     * Update playback progress and completion metrics with explicit completion status.
+     */
+    suspend fun updatePlaybackProgress(
+        id: String,
+        positionMs: Long,
+        percentage: Float,
+        lastPlayedAt: Long,
+        isCompleted: Boolean
+    ) {
+        updatePlaybackProgress(id, positionMs, percentage, lastPlayedAt)
+    }
+
+    /**
+     * Restarts playback session for a video (e.g. when reopening a completed video).
+     * Sets position to 0, completion to false, updates lastPlayedAt, and increments watchCount.
+     */
+    suspend fun restartPlayback(id: String, startTimeMs: Long = System.currentTimeMillis()) {}
+
+    /**
+     * Clear history record for a single video. Resets playback position, percentage, and completion status.
+     */
+    suspend fun clearHistoryForVideo(id: String) {}
+
+    /**
+     * Clear all playback history. Resets playback position, percentage, and completion status for all played videos.
+     */
+    suspend fun clearAllHistory() {}
 
     /**
      * Toggle or set favorite state.

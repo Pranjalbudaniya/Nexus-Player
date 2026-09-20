@@ -38,6 +38,11 @@ sealed interface QueueSource {
     data class HomeSection(val sectionTitle: String) : QueueSource
 
     /**
+     * Queue originated from playback history.
+     */
+    data object History : QueueSource
+
+    /**
      * Queue created from ad-hoc or manually selected videos.
      */
     data object Manual : QueueSource

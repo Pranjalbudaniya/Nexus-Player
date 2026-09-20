@@ -40,6 +40,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -81,7 +82,8 @@ class PlayerViewModelTest {
         title: String = "Test Video",
         durationMs: Long = 100_000L,
         playbackPositionMs: Long = 0L,
-        playbackPercentage: Float = 0.0f
+        playbackPercentage: Float = 0.0f,
+        isCompleted: Boolean = false
     ) = Video(
         id = id,
         mediaUri = "content://media/$id",
@@ -98,7 +100,8 @@ class PlayerViewModelTest {
         dateAdded = 1000L,
         lastModified = 1000L,
         playbackPositionMs = playbackPositionMs,
-        playbackPercentage = playbackPercentage
+        playbackPercentage = playbackPercentage,
+        isCompleted = isCompleted
     )
 
     private fun createViewModel(savedStateHandle: SavedStateHandle = SavedStateHandle()): PlayerViewModel {
@@ -162,6 +165,34 @@ class PlayerViewModelTest {
         assertEquals(listOf(0L), fakePlayer.initialPositions)
         val state = viewModel.uiState.value as PlayerUiState.Ready
         assertEquals(0L, state.currentPositionMs)
+    }
+
+    @Test
+    fun initialLoad_explicitCompletedVideo_restartsFromBeginningAndResetsStateInRepo() = testScope.runTest {
+        val video = createSampleVideo(
+            id = "vid_explicit_completed",
+            playbackPositionMs = 50_000L,
+            playbackPercentage = 0.50f,
+            isCompleted = true
+        )
+        fakeVideoRepository.addVideo(video)
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "vid_explicit_completed"))
+        val viewModel = createViewModel(savedStateHandle)
+
+        advanceUntilIdle()
+
+        // Marked completed should restart at 0
+        assertEquals(listOf(0L), fakePlayer.initialPositions)
+        val state = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals(0L, state.currentPositionMs)
+
+        // Verify repository state was reset
+        val repoVideo = fakeVideoRepository.getVideoById("vid_explicit_completed")
+        assertNotNull(repoVideo)
+        assertEquals(0L, repoVideo?.playbackPositionMs)
+        assertEquals(0.0f, repoVideo?.playbackPercentage ?: 1f, 0.001f)
+        assertFalse(repoVideo?.isCompleted ?: true)
     }
 
     @Test
@@ -320,6 +351,7 @@ class PlayerViewModelTest {
         assertEquals("vid_95", update.id)
         assertEquals(95_000L, update.positionMs)
         assertEquals(0.95f, update.percentage, 0.001f)
+        assertTrue(update.isCompleted)
     }
 
     @Test
@@ -1356,7 +1388,8 @@ class PlayerViewModelTest {
         val id: String,
         val positionMs: Long,
         val percentage: Float,
-        val lastPlayedAt: Long
+        val lastPlayedAt: Long,
+        val isCompleted: Boolean = false
     )
 
     private class TestFakeVideoRepository : VideoRepository {
@@ -1373,14 +1406,42 @@ class PlayerViewModelTest {
             id: String,
             positionMs: Long,
             percentage: Float,
-            lastPlayedAt: Long
+            lastPlayedAt: Long,
+            isCompleted: Boolean
         ) {
-            progressUpdates.add(ProgressUpdate(id, positionMs, percentage, lastPlayedAt))
+            progressUpdates.add(ProgressUpdate(id, positionMs, percentage, lastPlayedAt, isCompleted))
             videos[id]?.let { v ->
                 videos[id] = v.copy(
                     playbackPositionMs = positionMs,
                     playbackPercentage = percentage,
-                    lastPlayedAt = lastPlayedAt
+                    lastPlayedAt = lastPlayedAt,
+                    isCompleted = isCompleted
+                )
+            }
+        }
+
+        override fun getAllHistoryVideos(): Flow<List<Video>> = emptyFlow()
+        override suspend fun clearHistoryForVideo(id: String) {
+            videos[id]?.let { v ->
+                videos[id] = v.copy(
+                    playbackPositionMs = 0L,
+                    playbackPercentage = 0f,
+                    lastPlayedAt = null,
+                    isCompleted = false
+                )
+            }
+        }
+        override suspend fun clearAllHistory() {
+            videos.keys.forEach { clearHistoryForVideo(it) }
+        }
+        override suspend fun restartPlayback(id: String, startTimeMs: Long) {
+            videos[id]?.let { v ->
+                videos[id] = v.copy(
+                    playbackPositionMs = 0L,
+                    playbackPercentage = 0f,
+                    isCompleted = false,
+                    lastPlayedAt = startTimeMs,
+                    watchCount = v.watchCount + 1
                 )
             }
         }

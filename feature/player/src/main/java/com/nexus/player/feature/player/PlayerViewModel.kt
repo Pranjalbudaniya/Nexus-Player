@@ -515,13 +515,27 @@ class PlayerViewModel internal constructor(
             if (video != null) {
                 consecutiveSkipCount = 0
                 _video.value = video
-                // Resume position rule: resume if <95% completed, has valid position, and not near the end
+                // Resume position rule: resume if not marked completed, <95% completed, has valid position, and not near the end
                 val isNearEnd = video.durationMs > 0L && (video.durationMs - video.playbackPositionMs) < 2000L
-                val isCompleted = video.playbackPercentage >= COMPLETION_THRESHOLD || isNearEnd
-                val startPosition = if (!isCompleted && video.playbackPositionMs > 0L && video.playbackPositionMs < video.durationMs) {
+                val isAlreadyCompleted = video.isCompleted || video.playbackPercentage >= COMPLETION_THRESHOLD || isNearEnd
+                val startPosition = if (!isAlreadyCompleted && video.playbackPositionMs > 0L && (video.durationMs <= 0L || video.playbackPositionMs < video.durationMs)) {
                     video.playbackPositionMs
                 } else {
                     0L
+                }
+
+                if (isAlreadyCompleted) {
+                    val restartTime = timeProvider()
+                    withContext(ioDispatcher) {
+                        videoRepository.restartPlayback(video.id, restartTime)
+                    }
+                    _video.value = video.copy(
+                        isCompleted = false,
+                        playbackPositionMs = 0L,
+                        playbackPercentage = 0.0f,
+                        lastPlayedAt = restartTime,
+                        watchCount = video.watchCount + 1
+                    )
                 }
 
                 val mediaItem = NexusMediaItem(
@@ -1003,7 +1017,8 @@ class PlayerViewModel internal constructor(
                 val now = timeProvider()
 
                 // Rule: >=95% completion immediately marks completed and removes from Continue Watching
-                if ((percentage >= COMPLETION_THRESHOLD || state.playbackState == PlaybackStatus.Ended) && !hasMarkedCompletedForSession) {
+                val isCompleted = percentage >= COMPLETION_THRESHOLD || state.playbackState == PlaybackStatus.Ended
+                if (isCompleted && !hasMarkedCompletedForSession) {
                     hasMarkedCompletedForSession = true
                     lastPersistWallTimeMs = now
                     lastPersistedPositionMs = position
@@ -1012,7 +1027,8 @@ class PlayerViewModel internal constructor(
                             id = video.id,
                             positionMs = position,
                             percentage = percentage,
-                            lastPlayedAt = now
+                            lastPlayedAt = now,
+                            isCompleted = true
                         )
                     }
                     _playerEvents.tryEmit(PlayerEvent.VideoCompleted(video.id))
@@ -1026,7 +1042,8 @@ class PlayerViewModel internal constructor(
                                 id = video.id,
                                 positionMs = position,
                                 percentage = percentage,
-                                lastPlayedAt = now
+                                lastPlayedAt = now,
+                                isCompleted = false
                             )
                         }
                     }
@@ -1083,6 +1100,7 @@ class PlayerViewModel internal constructor(
         } else {
             0f
         }
+        val isCompleted = hasMarkedCompletedForSession || percentage >= COMPLETION_THRESHOLD || state.playbackState == PlaybackStatus.Ended
         val now = timeProvider()
         lastPersistWallTimeMs = now
         lastPersistedPositionMs = position
@@ -1092,7 +1110,8 @@ class PlayerViewModel internal constructor(
                 id = video.id,
                 positionMs = position,
                 percentage = percentage,
-                lastPlayedAt = now
+                lastPlayedAt = now,
+                isCompleted = isCompleted
             )
         }
     }

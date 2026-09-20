@@ -57,6 +57,7 @@ class VideoDaoTest {
         playbackPositionMs: Long = 0L,
         playbackPercentage: Float = 0.0f,
         isFavorite: Boolean = false,
+        isCompleted: Boolean = false,
         watchCount: Int = 0
     ) = VideoEntity(
         id = id,
@@ -83,6 +84,7 @@ class VideoDaoTest {
         playbackPositionMs = playbackPositionMs,
         playbackPercentage = playbackPercentage,
         isFavorite = isFavorite,
+        isCompleted = isCompleted,
         watchCount = watchCount
     )
 
@@ -347,5 +349,125 @@ class VideoDaoTest {
         val home = videoDao.searchVideos("Home_Videos", "Home\\_Videos", "Home\\_Videos%").first()
         assertEquals(1, home.size)
         assertEquals("Nature 2", home[0].title)
+    }
+
+    @Test
+    fun continueWatchingExcludesCompletedVideosEvenIfPercentageUnderThreshold() = runTest {
+        videoDao.upsertVideos(
+            listOf(
+                createSampleVideo(
+                    id = "cw_1", mediaUri = "cw_uri_1", title = "In Progress",
+                    playbackPositionMs = 25000L, playbackPercentage = 0.40f,
+                    lastPlayedAt = 1000L, isCompleted = false
+                ),
+                createSampleVideo(
+                    id = "cw_2", mediaUri = "cw_uri_2", title = "Marked Completed",
+                    playbackPositionMs = 25000L, playbackPercentage = 0.40f,
+                    lastPlayedAt = 2000L, isCompleted = true
+                )
+            )
+        )
+
+        val cw = videoDao.getContinueWatchingVideos().first()
+        assertEquals(1, cw.size)
+        assertEquals("In Progress", cw[0].title)
+    }
+
+    @Test
+    fun historyIncludesBothInProgressAndCompletedVideos() = runTest {
+        videoDao.upsertVideos(
+            listOf(
+                createSampleVideo(
+                    id = "h_1", mediaUri = "h_uri_1", title = "Watched Earlier",
+                    playbackPositionMs = 20000L, playbackPercentage = 0.3f,
+                    lastPlayedAt = 1000L, isCompleted = false
+                ),
+                createSampleVideo(
+                    id = "h_2", mediaUri = "h_uri_2", title = "Finished Today",
+                    playbackPositionMs = 600000L, playbackPercentage = 1.0f,
+                    lastPlayedAt = 5000L, isCompleted = true
+                ),
+                createSampleVideo(
+                    id = "h_3", mediaUri = "h_uri_3", title = "Never Played",
+                    lastPlayedAt = null
+                )
+            )
+        )
+
+        val history = videoDao.getAllHistoryVideos().first()
+        assertEquals(2, history.size)
+        assertEquals("Finished Today", history[0].title)
+        assertEquals("Watched Earlier", history[1].title)
+    }
+
+    @Test
+    fun restartPlaybackResetsPositionAndIncrementsWatchCount() = runTest {
+        val video = createSampleVideo(
+            id = "restart_1",
+            playbackPositionMs = 590000L,
+            playbackPercentage = 0.98f,
+            isCompleted = true,
+            watchCount = 2,
+            lastPlayedAt = 10000L
+        )
+        videoDao.insertVideo(video)
+
+        videoDao.restartPlayback("restart_1", 20000L)
+
+        val restarted = videoDao.getVideoById("restart_1")
+        assertNotNull(restarted)
+        assertEquals(0L, restarted?.playbackPositionMs)
+        assertEquals(0.0f, restarted?.playbackPercentage ?: 1f, 0.001f)
+        assertFalse(restarted?.isCompleted ?: true)
+        assertEquals(20000L, restarted?.lastPlayedAt)
+        assertEquals(3, restarted?.watchCount)
+    }
+
+    @Test
+    fun clearHistoryForSingleVideoRemovesFromHistoryAndContinueWatchingWithoutDeletingVideo() = runTest {
+        val video = createSampleVideo(
+            id = "clear_single",
+            playbackPositionMs = 40000L,
+            playbackPercentage = 0.5f,
+            isCompleted = false,
+            lastPlayedAt = 12345L
+        )
+        videoDao.insertVideo(video)
+
+        assertEquals(1, videoDao.getContinueWatchingVideos().first().size)
+        assertEquals(1, videoDao.getAllHistoryVideos().first().size)
+
+        videoDao.clearHistoryForVideo("clear_single")
+
+        // Removed from continue watching and history
+        assertTrue(videoDao.getContinueWatchingVideos().first().isEmpty())
+        assertTrue(videoDao.getAllHistoryVideos().first().isEmpty())
+
+        // Video record still exists in library
+        val preserved = videoDao.getVideoById("clear_single")
+        assertNotNull(preserved)
+        assertNull(preserved?.lastPlayedAt)
+        assertEquals(0L, preserved?.playbackPositionMs)
+        assertEquals(0.0f, preserved?.playbackPercentage ?: 1f, 0.001f)
+        assertFalse(preserved?.isCompleted ?: true)
+    }
+
+    @Test
+    fun clearAllHistoryResetsAllPlayedVideos() = runTest {
+        videoDao.upsertVideos(
+            listOf(
+                createSampleVideo(id = "1", mediaUri = "u1", lastPlayedAt = 1000L, playbackPositionMs = 500L),
+                createSampleVideo(id = "2", mediaUri = "u2", lastPlayedAt = 2000L, isCompleted = true),
+                createSampleVideo(id = "3", mediaUri = "u3", lastPlayedAt = null)
+            )
+        )
+
+        assertEquals(2, videoDao.getAllHistoryVideos().first().size)
+
+        videoDao.clearAllHistory()
+
+        assertTrue(videoDao.getAllHistoryVideos().first().isEmpty())
+        assertTrue(videoDao.getContinueWatchingVideos().first().isEmpty())
+        assertEquals(3, videoDao.getVideosCount())
     }
 }

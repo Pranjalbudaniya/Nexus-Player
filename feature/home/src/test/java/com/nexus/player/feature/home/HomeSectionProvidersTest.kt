@@ -304,7 +304,8 @@ class HomeSectionProvidersTest {
         lastPlayedAt: Long? = null,
         playbackPositionMs: Long = 0L,
         playbackPercentage: Float = 0.0f,
-        isFavorite: Boolean = false
+        isFavorite: Boolean = false,
+        isCompleted: Boolean = false
     ): Video = Video(
         id = id,
         mediaUri = mediaUri,
@@ -324,7 +325,8 @@ class HomeSectionProvidersTest {
         lastPlayedAt = lastPlayedAt,
         playbackPositionMs = playbackPositionMs,
         playbackPercentage = playbackPercentage,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        isCompleted = isCompleted
     )
 
     private class FakeTestVideoRepository : VideoRepository {
@@ -338,6 +340,7 @@ class HomeSectionProvidersTest {
         override fun getFavoriteVideos(limit: Int): Flow<List<Video>> = favoriteVideos.asStateFlow()
         override fun getContinueWatchingVideos(limit: Int): Flow<List<Video>> = continueWatchingVideos.asStateFlow()
         override fun getHistoryVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
+        override fun getAllHistoryVideos(): Flow<List<Video>> = flowOf(emptyList())
         override fun getVideosByFolder(folderPath: String): Flow<List<Video>> = flowOf(emptyList())
         override fun getFolders(): Flow<List<VideoFolder>> = flowOf(emptyList())
         override suspend fun getVideoById(id: String): Video? = null
@@ -346,7 +349,10 @@ class HomeSectionProvidersTest {
         override suspend fun insertVideo(video: Video): Long = 1L
         override suspend fun upsertVideo(video: Video) {}
         override suspend fun upsertVideos(videos: List<Video>) {}
-        override suspend fun updatePlaybackProgress(id: String, positionMs: Long, percentage: Float, lastPlayedAt: Long) {}
+        override suspend fun updatePlaybackProgress(id: String, positionMs: Long, percentage: Float, lastPlayedAt: Long, isCompleted: Boolean) {}
+        override suspend fun restartPlayback(id: String, startTimeMs: Long) {}
+        override suspend fun clearHistoryForVideo(id: String) {}
+        override suspend fun clearAllHistory() {}
         override suspend fun setFavorite(id: String, isFavorite: Boolean) {}
         override suspend fun deleteVideo(id: String) {}
         override suspend fun deleteVideoByUri(mediaUri: String) {}

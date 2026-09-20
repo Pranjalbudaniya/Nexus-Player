@@ -1,0 +1,37 @@
+package com.nexus.player.feature.more
+
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.compose.composable
+import com.nexus.player.core.navigation.HistoryRoute
+import com.nexus.player.core.navigation.MoreRoute
+import com.nexus.player.feature.more.history.HistoryRoute
+
+fun NavGraphBuilder.moreScreen(
+    onNavigateToPlayer: (String) -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit
+) {
+    composable<MoreRoute> {
+        MoreRoute(
+            onNavigateToPlayer = onNavigateToPlayer,
+            onNavigateToHistory = onNavigateToHistory,
+            onNavigateToSettings = onNavigateToSettings,
+            onFolderClick = onFolderClick
+        )
+    }
+}
+
+fun NavGraphBuilder.historyScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToPlayer: (String) -> Unit,
+    onFolderClick: (folderPath: String, folderName: String) -> Unit
+) {
+    composable<HistoryRoute> {
+        HistoryRoute(
+            onNavigateBack = onNavigateBack,
+            onNavigateToPlayer = onNavigateToPlayer,
+            onFolderClick = onFolderClick
+        )
+    }
+}

@@ -74,7 +74,8 @@ class ContinueWatchingSectionProviderImpl @Inject constructor(
                         video.playbackPositionMs > 0L &&
                         // Must have valid last played timestamp
                         lastPlayed != null && lastPlayed > 0L &&
-                        // Respect 95% completion exclusion rule
+                        // Respect 95% completion exclusion rule and isCompleted flag
+                        !video.isCompleted &&
                         video.playbackPercentage < 0.95f &&
                         // Sanity check: position cannot exceed or equal 95% of duration
                         video.playbackPositionMs < (video.durationMs * 0.95f).toLong()

@@ -53,7 +53,10 @@ abstract class DatabaseModule {
                 NexusDatabase::class.java,
                 NexusDatabase.DATABASE_NAME
             )
-                .addMigrations(NexusDatabase.MIGRATION_1_2)
+                .addMigrations(
+                    NexusDatabase.MIGRATION_1_2,
+                    NexusDatabase.MIGRATION_2_3
+                )
                 .build()
         }
 

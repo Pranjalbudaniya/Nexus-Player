@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.nexus.player.core.navigation.FolderRoute
+import com.nexus.player.core.navigation.HistoryRoute
 import com.nexus.player.core.navigation.HomeRoute
 import com.nexus.player.core.navigation.LibraryRoute
 import com.nexus.player.core.navigation.MoreRoute
@@ -20,6 +21,8 @@ import com.nexus.player.core.navigation.SettingsRoute
 import com.nexus.player.feature.home.homeScreen
 import com.nexus.player.feature.library.folder.folderScreen
 import com.nexus.player.feature.library.libraryScreen
+import com.nexus.player.feature.more.historyScreen
+import com.nexus.player.feature.more.moreScreen
 import com.nexus.player.feature.onboarding.onboardingScreen
 import com.nexus.player.feature.player.playerScreen
 import com.nexus.player.feature.playlists.navigation.playlistDetailScreen
@@ -120,13 +123,33 @@ fun NexusNavHost(
         )
 
         // Tab 4: More
-        composable<MoreRoute> {
-            NexusPlaceholderScreen(
-                title = "More",
-                subtitle = "Playback history, analytics, network streams, and tools",
-                badgeText = "More Tab"
-            )
-        }
+        moreScreen(
+            onNavigateToPlayer = { videoId ->
+                navController.navigate(PlayerRoute(videoId))
+            },
+            onNavigateToHistory = {
+                navController.navigate(HistoryRoute)
+            },
+            onNavigateToSettings = {
+                navController.navigate(SettingsRoute)
+            },
+            onFolderClick = { folderPath, folderName ->
+                navController.navigate(FolderRoute(folderPath, folderName))
+            }
+        )
+
+        // Deep Destination: Watch History
+        historyScreen(
+            onNavigateBack = {
+                navController.popBackStack()
+            },
+            onNavigateToPlayer = { videoId ->
+                navController.navigate(PlayerRoute(videoId))
+            },
+            onFolderClick = { folderPath, folderName ->
+                navController.navigate(FolderRoute(folderPath, folderName))
+            }
+        )
 
         // Deep Destination: Settings (Strictly outside bottom navigation)
         composable<SettingsRoute> {

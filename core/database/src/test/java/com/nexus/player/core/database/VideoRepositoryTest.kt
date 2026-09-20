@@ -63,6 +63,7 @@ class VideoRepositoryTest {
         playbackPositionMs: Long = 0L,
         playbackPercentage: Float = 0.0f,
         isFavorite: Boolean = false,
+        isCompleted: Boolean = false,
         fileName: String = "$title.mp4",
         resolutionLabel: String = "1080p",
         videoCodec: String? = "H.264",
@@ -87,7 +88,8 @@ class VideoRepositoryTest {
         lastPlayedAt = lastPlayedAt,
         playbackPositionMs = playbackPositionMs,
         playbackPercentage = playbackPercentage,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        isCompleted = isCompleted
     )
 
     @Test
@@ -307,5 +309,50 @@ class VideoRepositoryTest {
         val updated = repository.searchVideos("Avatar").first()
         assertEquals(1, updated.size)
         assertEquals("2", updated[0].id)
+    }
+
+    @Test
+    fun repositoryHistoryOperations() = runTest {
+        repository.upsertVideos(
+            listOf(
+                sampleDomainVideo(id = "1", title = "V1", lastPlayedAt = 1000L, playbackPositionMs = 20000L, isCompleted = false),
+                sampleDomainVideo(id = "2", title = "V2", lastPlayedAt = 3000L, playbackPositionMs = 50000L, isCompleted = true),
+                sampleDomainVideo(id = "3", title = "V3", lastPlayedAt = null)
+            )
+        )
+
+        val history = repository.getAllHistoryVideos().first()
+        assertEquals(2, history.size)
+        assertEquals("V2", history[0].title)
+        assertEquals("V1", history[1].title)
+
+        // Clear single video
+        repository.clearHistoryForVideo("1")
+        val afterClearSingle = repository.getAllHistoryVideos().first()
+        assertEquals(1, afterClearSingle.size)
+        assertEquals("V2", afterClearSingle[0].title)
+
+        // Clear all history
+        repository.clearAllHistory()
+        val afterClearAll = repository.getAllHistoryVideos().first()
+        assertEquals(0, afterClearAll.size)
+    }
+
+    @Test
+    fun repositoryRestartPlayback() = runTest {
+        repository.upsertVideos(
+            listOf(
+                sampleDomainVideo(id = "restart_repo", title = "Completed Video", isCompleted = true, playbackPositionMs = 99000L, playbackPercentage = 0.99f, lastPlayedAt = 1000L)
+            )
+        )
+
+        repository.restartPlayback("restart_repo", 5000L)
+
+        val video = repository.getVideoById("restart_repo")
+        assertNotNull(video)
+        assertEquals(0L, video?.playbackPositionMs)
+        assertEquals(0f, video?.playbackPercentage ?: 1f, 0.001f)
+        assertEquals(false, video?.isCompleted)
+        assertEquals(5000L, video?.lastPlayedAt)
     }
 }

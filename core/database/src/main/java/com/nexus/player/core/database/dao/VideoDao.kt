@@ -72,6 +72,7 @@ interface VideoDao {
         SELECT * FROM videos 
         WHERE playbackPositionMs > 0 
           AND playbackPercentage < 0.95 
+          AND isCompleted = 0 
           AND lastPlayedAt IS NOT NULL 
         ORDER BY lastPlayedAt DESC 
         LIMIT :limit
@@ -80,6 +81,9 @@ interface VideoDao {
 
     @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT :limit")
     fun getHistoryVideos(limit: Int = 20): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC")
+    fun getAllHistoryVideos(): Flow<List<VideoEntity>>
 
     @Query("SELECT * FROM videos WHERE folderPath = :folderPath ORDER BY title COLLATE NOCASE ASC")
     fun getVideosByFolder(folderPath: String): Flow<List<VideoEntity>>
@@ -189,15 +193,48 @@ interface VideoDao {
         SET playbackPositionMs = :positionMs, 
             playbackPercentage = :percentage, 
             lastPlayedAt = :lastPlayedAt,
-            watchCount = CASE WHEN :percentage >= 0.90 THEN watchCount + 1 ELSE watchCount END
+            isCompleted = CASE WHEN :isCompleted = 1 OR :percentage >= 0.949 THEN 1 ELSE :isCompleted END,
+            watchCount = CASE WHEN :isCompleted = 1 OR :percentage >= 0.949 THEN watchCount + 1 ELSE watchCount END
         WHERE id = :id
     """)
     suspend fun updatePlaybackProgress(
         id: String,
         positionMs: Long,
         percentage: Float,
-        lastPlayedAt: Long
+        lastPlayedAt: Long,
+        isCompleted: Boolean = false
     )
+
+    @Query("""
+        UPDATE videos 
+        SET isCompleted = 0, 
+            playbackPositionMs = 0, 
+            playbackPercentage = 0.0, 
+            lastPlayedAt = :startTimeMs, 
+            watchCount = watchCount + 1 
+        WHERE id = :id
+    """)
+    suspend fun restartPlayback(id: String, startTimeMs: Long)
+
+    @Query("""
+        UPDATE videos 
+        SET lastPlayedAt = NULL, 
+            playbackPositionMs = 0, 
+            playbackPercentage = 0.0, 
+            isCompleted = 0 
+        WHERE id = :id
+    """)
+    suspend fun clearHistoryForVideo(id: String)
+
+    @Query("""
+        UPDATE videos 
+        SET lastPlayedAt = NULL, 
+            playbackPositionMs = 0, 
+            playbackPercentage = 0.0, 
+            isCompleted = 0 
+        WHERE lastPlayedAt IS NOT NULL
+    """)
+    suspend fun clearAllHistory()
 
     @Query("UPDATE videos SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavorite(id: String, isFavorite: Boolean)

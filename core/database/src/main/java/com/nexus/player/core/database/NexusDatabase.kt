@@ -15,6 +15,7 @@ import com.nexus.player.core.database.entity.VideoEntity
  *
  * Schema version 1: Initial local video metadata table [VideoEntity].
  * Schema version 2: User playlists and playlist-items relationship [PlaylistEntity], [PlaylistItemEntity].
+ * Schema version 3: Added isCompleted column and index to [VideoEntity] for watch-state system.
  * Robust migration strategy: migrations are explicitly registered without destructive fallbacks.
  */
 @Database(
@@ -23,7 +24,7 @@ import com.nexus.player.core.database.entity.VideoEntity
         PlaylistEntity::class,
         PlaylistItemEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class NexusDatabase : RoomDatabase() {
@@ -95,6 +96,17 @@ abstract class NexusDatabase : RoomDatabase() {
                     CREATE INDEX IF NOT EXISTS `index_playlist_items_playlistId`
                     ON `playlist_items` (`playlistId`)
                     """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `videos` ADD COLUMN `isCompleted` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_videos_isCompleted` ON `videos` (`isCompleted`)"
                 )
             }
         }

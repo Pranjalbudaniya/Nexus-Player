@@ -22,7 +22,8 @@ import androidx.room.PrimaryKey
         Index(value = ["isFavorite"]),
         Index(value = ["dateAdded"]),
         Index(value = ["lastPlayedAt"]),
-        Index(value = ["folderPath"])
+        Index(value = ["folderPath"]),
+        Index(value = ["isCompleted"])
     ]
 )
 data class VideoEntity(
@@ -98,6 +99,9 @@ data class VideoEntity(
 
     @ColumnInfo(name = "isFavorite")
     val isFavorite: Boolean = false,
+
+    @ColumnInfo(name = "isCompleted")
+    val isCompleted: Boolean = false,
 
     @ColumnInfo(name = "watchCount")
     val watchCount: Int = 0,

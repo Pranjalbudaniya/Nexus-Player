@@ -32,6 +32,7 @@ data class Video(
     val playbackPositionMs: Long = 0L,
     val playbackPercentage: Float = 0.0f,
     val isFavorite: Boolean = false,
+    val isCompleted: Boolean = false,
     val watchCount: Int = 0,
     val extraMetadata: String? = null
 )
@@ -101,6 +102,7 @@ fun VideoEntity.asDomain(): Video = Video(
     playbackPositionMs = playbackPositionMs,
     playbackPercentage = playbackPercentage,
     isFavorite = isFavorite,
+    isCompleted = isCompleted,
     watchCount = watchCount,
     extraMetadata = extraMetadata
 )
@@ -133,6 +135,7 @@ fun Video.asEntity(): VideoEntity = VideoEntity(
     playbackPositionMs = playbackPositionMs,
     playbackPercentage = playbackPercentage,
     isFavorite = isFavorite,
+    isCompleted = isCompleted,
     watchCount = watchCount,
     extraMetadata = extraMetadata
 )

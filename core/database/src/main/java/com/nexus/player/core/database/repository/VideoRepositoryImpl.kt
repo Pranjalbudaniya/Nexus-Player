@@ -105,6 +105,12 @@ class VideoRepositoryImpl @Inject constructor(
             .flowOn(ioDispatcher)
     }
 
+    override fun getAllHistoryVideos(): Flow<List<Video>> {
+        return videoDao.getAllHistoryVideos()
+            .map { entities -> entities.map { it.asDomain() } }
+            .flowOn(ioDispatcher)
+    }
+
     override fun getVideosByFolder(folderPath: String): Flow<List<Video>> {
         return videoDao.getVideosByFolder(folderPath)
             .map { entities -> entities.map { it.asDomain() } }
@@ -145,9 +151,22 @@ class VideoRepositoryImpl @Inject constructor(
         id: String,
         positionMs: Long,
         percentage: Float,
-        lastPlayedAt: Long
+        lastPlayedAt: Long,
+        isCompleted: Boolean
     ) = withContext(ioDispatcher) {
-        videoDao.updatePlaybackProgress(id, positionMs, percentage, lastPlayedAt)
+        videoDao.updatePlaybackProgress(id, positionMs, percentage, lastPlayedAt, isCompleted)
+    }
+
+    override suspend fun restartPlayback(id: String, startTimeMs: Long) = withContext(ioDispatcher) {
+        videoDao.restartPlayback(id, startTimeMs)
+    }
+
+    override suspend fun clearHistoryForVideo(id: String) = withContext(ioDispatcher) {
+        videoDao.clearHistoryForVideo(id)
+    }
+
+    override suspend fun clearAllHistory() = withContext(ioDispatcher) {
+        videoDao.clearAllHistory()
     }
 
     override suspend fun setFavorite(id: String, isFavorite: Boolean) = withContext(ioDispatcher) {
