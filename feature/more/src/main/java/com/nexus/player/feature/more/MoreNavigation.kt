@@ -5,8 +5,10 @@ import androidx.navigation.compose.composable
 import com.nexus.player.core.navigation.AnalyticsRoute
 import com.nexus.player.core.navigation.HistoryRoute
 import com.nexus.player.core.navigation.MoreRoute
+import com.nexus.player.core.navigation.SettingsRoute
 import com.nexus.player.feature.more.analytics.AnalyticsRoute
 import com.nexus.player.feature.more.history.HistoryRoute
+import com.nexus.player.feature.more.settings.SettingsRoute
 
 fun NavGraphBuilder.moreScreen(
     onNavigateToPlayer: (String) -> Unit,
@@ -51,3 +53,14 @@ fun NavGraphBuilder.analyticsScreen(
         )
     }
 }
+
+fun NavGraphBuilder.settingsScreen(
+    onNavigateBack: () -> Unit
+) {
+    composable<SettingsRoute> {
+        SettingsRoute(
+            onNavigateBack = onNavigateBack
+        )
+    }
+}
+

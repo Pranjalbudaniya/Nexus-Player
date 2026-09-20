@@ -25,6 +25,7 @@ import com.nexus.player.feature.library.libraryScreen
 import com.nexus.player.feature.more.analyticsScreen
 import com.nexus.player.feature.more.historyScreen
 import com.nexus.player.feature.more.moreScreen
+import com.nexus.player.feature.more.settingsScreen
 import com.nexus.player.feature.onboarding.onboardingScreen
 import com.nexus.player.feature.player.playerScreen
 import com.nexus.player.feature.playlists.navigation.playlistDetailScreen
@@ -167,16 +168,12 @@ fun NexusNavHost(
         )
 
         // Deep Destination: Settings (Strictly outside bottom navigation)
-        composable<SettingsRoute> {
-            NexusPlaceholderScreen(
-                title = "Settings",
-                subtitle = "Appearance, video decoding, audio passthrough, and preferences",
-                badgeText = "Deep Screen",
-                onBackClick = {
-                    navController.popBackStack()
-                }
-            )
-        }
+        settingsScreen(
+            onNavigateBack = {
+                navController.popBackStack()
+            }
+        )
+
 
         // Deep Destination: Player
         playerScreen(
