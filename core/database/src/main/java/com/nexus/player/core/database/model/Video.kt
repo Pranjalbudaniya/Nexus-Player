@@ -71,7 +71,9 @@ enum class VideoSortOrder {
     SIZE_DESC,
     SIZE_ASC,
     LAST_PLAYED_DESC,
-    LAST_PLAYED_ASC
+    LAST_PLAYED_ASC,
+    DATE_MODIFIED_DESC,
+    DATE_MODIFIED_ASC
 }
 
 /**

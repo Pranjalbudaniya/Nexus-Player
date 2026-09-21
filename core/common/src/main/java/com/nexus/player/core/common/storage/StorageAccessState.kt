@@ -22,7 +22,8 @@ data class StorageAccessState(
     val isOnboardingCompleted: Boolean = false,
     val isPermissionGranted: Boolean = false,
     val accessMode: StorageAccessMode = StorageAccessMode.ALL_MEDIA,
-    val selectedFolderUris: Set<String> = emptySet()
+    val selectedFolderUris: Set<String> = emptySet(),
+    val excludedFolderPaths: Set<String> = emptySet()
 ) {
     /**
      * Returns true if Nexus Player has valid, actionable access to local media.

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -59,7 +60,11 @@ import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.model.toMediaMetadata
+import com.nexus.player.core.ui.component.NexusEmptyState
+import com.nexus.player.core.ui.component.NexusErrorState
+import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 import com.nexus.player.feature.playlists.component.DeletePlaylistConfirmationDialog
 import com.nexus.player.feature.playlists.component.RenamePlaylistDialog
@@ -100,7 +105,9 @@ fun PlaylistDetailRoute(
                     result.onSuccess { renamed ->
                         snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                        snackbarHostState.showSnackbar(
+                            UserFeedbackFormatter.formatFileError("Rename", error)
+                        )
                     }
                 }
             }
@@ -112,7 +119,9 @@ fun PlaylistDetailRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Moved to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                        snackbarHostState.showSnackbar(
+                            UserFeedbackFormatter.formatFileError("Move", error)
+                        )
                     }
                 }
             }
@@ -124,7 +133,9 @@ fun PlaylistDetailRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Copied to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                        snackbarHostState.showSnackbar(
+                            UserFeedbackFormatter.formatFileError("Copy", error)
+                        )
                     }
                 }
             }
@@ -142,7 +153,11 @@ fun PlaylistDetailRoute(
                             viewModel.restoreDeletedVideo(video.id) { restoreResult ->
                                 if (restoreResult.isFailure) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                        snackbarHostState.showSnackbar(
+                                            restoreResult.exceptionOrNull()?.let {
+                                                UserFeedbackFormatter.formatFileError("Restore", it)
+                                            } ?: "Failed to restore video"
+                                        )
                                     }
                                 }
                             }
@@ -150,7 +165,9 @@ fun PlaylistDetailRoute(
                             viewModel.purgeStagedDeletions()
                         }
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                        snackbarHostState.showSnackbar(
+                            UserFeedbackFormatter.formatFileError("Delete", error)
+                        )
                     }
                 }
             }
@@ -408,55 +425,37 @@ fun PlaylistDetailContent(
                 )
             }
 
-            // Content or Empty
+            // Content, Loading, Error, or Empty
             when {
+                uiState.isLoading -> {
+                    NexusLoadingIndicator(label = "Loading playlist...")
+                }
+                playlist == null -> {
+                    NexusErrorState(
+                        message = "Playlist not found or has been removed.",
+                        actionText = "Go Back",
+                        onActionClick = onNavigateBack
+                    )
+                }
                 uiState.isEmpty -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.large),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(spacing.medium)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VideoLibrary,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Text(
-                                text = "No videos in this playlist",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Add videos from your library using the long-press menu",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(spacing.small))
-                            Button(onClick = onNavigateToLibrary) {
-                                Text("Browse Library")
-                            }
-                        }
-                    }
+                    NexusEmptyState(
+                        icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                        title = "No videos in this playlist",
+                        description = "Add videos from your library using the video actions menu.",
+                        actionText = "Browse Library",
+                        actionIcon = Icons.Default.VideoLibrary,
+                        onActionClick = onNavigateToLibrary
+                    )
                 }
                 items.isEmpty() && uiState.searchQuery.isNotBlank() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.large),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No videos matching \"${uiState.searchQuery}\"",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    NexusEmptyState(
+                        icon = Icons.Default.Search,
+                        title = "No matching videos",
+                        description = "No video in this playlist matches \"${uiState.searchQuery}\".",
+                        actionText = "Clear Search",
+                        actionIcon = Icons.Default.Clear,
+                        onActionClick = { onSearchQueryChange("") }
+                    )
                 }
                 else -> {
                     LazyColumn(

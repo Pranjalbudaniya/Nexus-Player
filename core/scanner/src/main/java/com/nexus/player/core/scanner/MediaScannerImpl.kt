@@ -11,6 +11,8 @@ import com.nexus.player.core.scanner.datasource.DiscoveredMediaItem
 import com.nexus.player.core.scanner.datasource.MediaStoreScanner
 import com.nexus.player.core.scanner.datasource.SafFolderScanner
 import com.nexus.player.core.scanner.extractor.VideoMetadataExtractor
+import com.nexus.player.core.common.settings.SettingsRepository
+import com.nexus.player.core.scanner.model.ScanOptions
 import com.nexus.player.core.scanner.model.ScanProgress
 import com.nexus.player.core.scanner.model.ScanResult
 import com.nexus.player.core.scanner.model.ScanState
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -45,7 +48,8 @@ class MediaScannerImpl @Inject constructor(
     private val safFolderScanner: SafFolderScanner,
     private val metadataExtractor: VideoMetadataExtractor,
     private val videoRepository: VideoRepository,
-    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher
+    @Dispatcher(NexusDispatchers.IO) private val ioDispatcher: CoroutineDispatcher,
+    private val settingsRepository: SettingsRepository? = null
 ) : MediaScanner {
 
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
@@ -54,7 +58,7 @@ class MediaScannerImpl @Inject constructor(
     private val scanMutex = Mutex()
     private var activeJob: Job? = null
 
-    override suspend fun startScan(): ScanResult = withContext(ioDispatcher) {
+    override suspend fun startScan(options: ScanOptions): ScanResult = withContext(ioDispatcher) {
         scanMutex.withLock {
             activeJob = currentCoroutineContext()[Job]
             val startTime = System.currentTimeMillis()
@@ -68,62 +72,145 @@ class MediaScannerImpl @Inject constructor(
                 return@withContext emptyResult
             }
 
+            val currentSettings = settingsRepository?.settings?.value?.library
+            val excludedFolders = (currentSettings?.excludedFolders ?: emptySet()) + accessState.excludedFolderPaths
+            val includeHiddenFiles = currentSettings?.includeHiddenFiles ?: false
+
             var scannedCount = 0
             var insertedCount = 0
             var updatedCount = 0
             val discoveredIds = mutableSetOf<String>()
             val processedUris = mutableSetOf<String>()
+            val scannedFolderPaths = mutableSetOf<String>()
             val pendingBatch = ArrayList<Video>(BATCH_SIZE)
 
             try {
                 val initialDbCount = videoRepository.getVideosCount()
 
+                // Pre-load lightweight in-memory lookup to avoid N+1 SQLite queries during discovery
+                val scanLookup = if (options.forceMetadataRefresh) {
+                    emptyMap()
+                } else if (options.targetFolderUriOrPath != null && !options.targetFolderUriOrPath.startsWith("content://")) {
+                    videoRepository.getScanLookupForFolder(options.targetFolderUriOrPath)
+                } else {
+                    videoRepository.getAllScanLookup()
+                }
+                val uriLookup = if (scanLookup.isNotEmpty()) {
+                    scanLookup.values.associateBy { it.mediaUri }
+                } else {
+                    emptyMap()
+                }
+
                 val itemProcessor: suspend (DiscoveredMediaItem) -> Unit = { item ->
                     currentCoroutineContext().ensureActive()
 
-                    // Guard: Avoid processing identical URI references multiple times in a single scan pass
-                    if (processedUris.add(item.mediaUri)) {
-                        discoveredIds.add(item.id)
-                        scannedCount++
+                    val isHidden = (item.fileName.startsWith(".") ||
+                        item.folderPath.split("/").any { it.startsWith(".") }) && !includeHiddenFiles
 
-                        _scanState.value = ScanState.Scanning(
-                            ScanProgress(
-                                current = scannedCount,
-                                total = null,
-                                currentFile = item.fileName
+                    val isExcluded = excludedFolders.any { excluded ->
+                        val cleanEx = excluded.trimEnd('/')
+                        item.folderPath.equals(cleanEx, ignoreCase = true) ||
+                            item.folderPath.startsWith("$cleanEx/", ignoreCase = true) ||
+                            item.mediaUri.startsWith(cleanEx)
+                    }
+
+                    val matchesTarget = if (options.targetFolderUriOrPath != null) {
+                        val target = options.targetFolderUriOrPath.trimEnd('/')
+                        item.folderPath.equals(target, ignoreCase = true) ||
+                            item.folderPath.startsWith("$target/", ignoreCase = true) ||
+                            item.mediaUri.startsWith(target)
+                    } else {
+                        true
+                    }
+
+                    if (!isHidden && !isExcluded && matchesTarget) {
+                        // Guard: Avoid processing identical URI references multiple times in a single scan pass
+                        if (processedUris.add(item.mediaUri)) {
+                            discoveredIds.add(item.id)
+                            scannedFolderPaths.add(item.folderPath)
+                            scannedCount++
+
+                            _scanState.value = ScanState.Scanning(
+                                ScanProgress(
+                                    current = scannedCount,
+                                    total = null,
+                                    currentFile = item.fileName
+                                )
                             )
-                        )
 
-                        try {
-                            val existing = videoRepository.getVideoById(item.id)
-                                ?: videoRepository.getVideoByUri(item.mediaUri)
+                            try {
+                                val cachedMeta = if (options.forceMetadataRefresh) null else (
+                                    scanLookup[item.id] ?: uriLookup[item.mediaUri]
+                                )
 
-                            val video = metadataExtractor.extractMetadata(item, existing)
-                            if (existing == null) {
-                                insertedCount++
-                            } else if (existing.lastModified != item.lastModified || existing.sizeBytes != item.sizeBytes) {
-                                updatedCount++
+                                val isUnchanged = cachedMeta != null &&
+                                    cachedMeta.lastModified == item.lastModified &&
+                                    cachedMeta.sizeBytes == item.sizeBytes &&
+                                    cachedMeta.fileName == item.fileName &&
+                                    cachedMeta.folderPath == item.folderPath
+
+                                if (!isUnchanged) {
+                                    val existingId = cachedMeta?.id ?: item.id
+                                    val existing = videoRepository.getVideoById(existingId)
+                                        ?: videoRepository.getVideoByUri(item.mediaUri)
+
+                                    val video = metadataExtractor.extractMetadata(item, existing)
+                                    if (existing == null) {
+                                        insertedCount++
+                                    } else {
+                                        updatedCount++
+                                    }
+
+                                    pendingBatch.add(video)
+                                    if (pendingBatch.size >= BATCH_SIZE) {
+                                        videoRepository.upsertVideos(pendingBatch)
+                                        pendingBatch.clear()
+                                        yield()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error processing media item ${item.mediaUri}: ${e.message}")
                             }
-
-                            pendingBatch.add(video)
-                            if (pendingBatch.size >= BATCH_SIZE) {
-                                videoRepository.upsertVideos(pendingBatch)
-                                pendingBatch.clear()
-                                yield()
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Error processing media item ${item.mediaUri}: ${e.message}")
                         }
                     }
                 }
 
-                // Execute appropriate discovery strategy based on access mode
-                when (accessState.accessMode) {
-                    StorageAccessMode.ALL_MEDIA -> {
+                // Execute appropriate discovery strategy based on access mode and target option
+                if (options.targetFolderUriOrPath != null) {
+                    val target = options.targetFolderUriOrPath
+                    if (target.startsWith("content://")) {
+                        scannedFolderPaths.add(target)
+                        safFolderScanner.scanFolders(setOf(target), itemProcessor)
+                    } else {
+                        scannedFolderPaths.add(target)
                         mediaStoreScanner.scanMediaStore(itemProcessor)
                     }
-                    StorageAccessMode.SELECTED_FOLDERS -> {
-                        safFolderScanner.scanFolders(accessState.selectedFolderUris, itemProcessor)
+                } else {
+                    when (accessState.accessMode) {
+                        StorageAccessMode.ALL_MEDIA -> {
+                            val existingFolders = try {
+                                videoRepository.getFolders().firstOrNull()?.map { it.folderPath } ?: emptyList()
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
+                            val nonExcluded = existingFolders.filter { f ->
+                                val cleanF = f.trimEnd('/')
+                                !excludedFolders.any { ex ->
+                                    val cleanEx = ex.trimEnd('/')
+                                    cleanF.equals(cleanEx, ignoreCase = true) ||
+                                        cleanF.startsWith("$cleanEx/", ignoreCase = true)
+                                }
+                            }
+                            scannedFolderPaths.addAll(nonExcluded)
+                            mediaStoreScanner.scanMediaStore(itemProcessor)
+                        }
+                        StorageAccessMode.SELECTED_FOLDERS -> {
+                            val foldersToScan = accessState.selectedFolderUris.filter { uri ->
+                                !excludedFolders.contains(uri)
+                            }.toSet()
+                            scannedFolderPaths.addAll(foldersToScan)
+                            safFolderScanner.scanFolders(foldersToScan, itemProcessor)
+                        }
                     }
                 }
 
@@ -134,11 +221,15 @@ class MediaScannerImpl @Inject constructor(
                     pendingBatch.clear()
                 }
 
-                // Stale file cleanup: prune items no longer present on device
+                // Scoped stale file cleanup: prune items only in locations that were actively scanned.
+                // Media records in excluded folders or temporarily inaccessible folders are preserved.
                 var removedCount = 0
-                if (discoveredIds.isNotEmpty() || initialDbCount > 0) {
+                if (scannedFolderPaths.isNotEmpty()) {
                     currentCoroutineContext().ensureActive()
-                    videoRepository.deleteStaleVideos(discoveredIds.toList())
+                    videoRepository.deleteStaleVideosInFolders(
+                        validIds = discoveredIds.toList(),
+                        scannedFolderPaths = scannedFolderPaths.toList()
+                    )
                     val finalDbCount = videoRepository.getVideosCount()
                     removedCount = maxOf(0, (initialDbCount + insertedCount) - finalDbCount)
                 }

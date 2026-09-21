@@ -38,6 +38,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -607,6 +609,37 @@ fun AudioSubtitlesSheet(
                         modifier = Modifier.weight(1f)
                     )
                 }
+            }
+
+            if (subtitleAppearance.backgroundStyle == SubtitleBackgroundStyle.Box) {
+                Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Background Opacity",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${(subtitleAppearance.backgroundOpacity * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Slider(
+                    value = subtitleAppearance.backgroundOpacity,
+                    onValueChange = { onSubtitleAppearanceChange(subtitleAppearance.copy(backgroundOpacity = it)) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("subtitles_sheet_opacity_slider")
+                )
             }
         }
     }

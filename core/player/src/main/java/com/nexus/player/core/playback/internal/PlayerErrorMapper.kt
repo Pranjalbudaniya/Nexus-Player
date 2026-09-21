@@ -16,7 +16,7 @@ internal object PlayerErrorMapper {
         val category = mapErrorCode(exception.errorCode)
         return PlaybackError(
             category = category,
-            userMessage = userMessageFor(category),
+            userMessage = userMessageFor(category, exception.errorCode),
             technicalDetail = buildTechnicalDetail(exception),
             cause = exception
         )
@@ -76,26 +76,34 @@ internal object PlayerErrorMapper {
         }
     }
 
-    private fun userMessageFor(category: ErrorCategory): String {
-        return when (category) {
-            ErrorCategory.UnsupportedCodec ->
-                "This video format is not supported on your device"
-            ErrorCategory.UnsupportedContainer ->
-                "This file type is not supported"
-            ErrorCategory.CorruptMedia ->
-                "This video file appears to be damaged"
-            ErrorCategory.MissingFile ->
-                "Video file not found"
-            ErrorCategory.PermissionDenied ->
-                "Permission required to access this file"
-            ErrorCategory.NetworkFailure ->
-                "Network connection failed"
-            ErrorCategory.InvalidUrl ->
-                "Invalid video URL"
-            ErrorCategory.DecoderInitFailure ->
-                "Video decoder failed to initialize"
-            ErrorCategory.Unknown ->
-                "Unable to play this video"
+    private fun userMessageFor(category: ErrorCategory, errorCode: Int = 0): String {
+        return when (errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                "Connection timed out. Check your internet connection."
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                "Server returned an error while loading video stream."
+            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE ->
+                "The URL did not return a supported video stream."
+            else -> when (category) {
+                ErrorCategory.UnsupportedCodec ->
+                    "This video format is not supported on your device"
+                ErrorCategory.UnsupportedContainer ->
+                    "This file type is not supported"
+                ErrorCategory.CorruptMedia ->
+                    "This video file appears to be damaged"
+                ErrorCategory.MissingFile ->
+                    "Video file not found"
+                ErrorCategory.PermissionDenied ->
+                    "Permission required to access this file"
+                ErrorCategory.NetworkFailure ->
+                    "Network connection failed"
+                ErrorCategory.InvalidUrl ->
+                    "Invalid video URL"
+                ErrorCategory.DecoderInitFailure ->
+                    "Video decoder failed to initialize"
+                ErrorCategory.Unknown ->
+                    "Unable to play this video"
+            }
         }
     }
 

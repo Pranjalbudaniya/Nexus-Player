@@ -11,26 +11,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,113 +47,81 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.model.MediaMetadata
-import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.ui.component.HorizontalSpacer
-import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
-import com.nexus.player.core.ui.component.VerticalSpacer
-import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
-import com.nexus.player.feature.more.component.ClearHistoryDialog
-import com.nexus.player.feature.more.component.HistoryItemRow
-import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
+import com.nexus.player.core.ui.component.contextmenu.VideoFileInfoDialog
+import com.nexus.player.feature.more.component.OpenNetworkUrlDialog
+import com.nexus.player.feature.more.settings.component.LicensesDialog
+import com.nexus.player.feature.more.settings.component.ProjectInfoDialog
 
+/**
+ * Top-level route for the More hub screen.
+ *
+ * Coordinates navigation to less-frequently-used areas (History, Analytics,
+ * Favorites, Playlists, Storage/Scanning) and technical/licensing dialogs.
+ */
 @Composable
 fun MoreRoute(
-    onNavigateToPlayer: (String) -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToPlaylists: () -> Unit,
+    onNavigateToStorageLocations: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onFolderClick: (folderPath: String, folderName: String) -> Unit,
+    onNavigateToPlayer: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: MoreViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val selectedVideoForMenu by viewModel.selectedVideoForMenu.collectAsStateWithLifecycle()
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
-
-    var videoForAddToPlaylist by remember { mutableStateOf<MediaMetadata?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val recentVideo by viewModel.recentVideoForInfo.collectAsStateWithLifecycle()
 
     MoreScreen(
-        uiState = uiState,
-        selectedVideoForMenu = selectedVideoForMenu,
-        folders = folders,
-        thumbnailLoader = viewModel.thumbnailLoader,
-        onNavigateToPlayer = { videoId ->
-            viewModel.playVideo(videoId)
-            onNavigateToPlayer(videoId)
-        },
+        recentVideo = recentVideo,
         onNavigateToHistory = onNavigateToHistory,
         onNavigateToAnalytics = onNavigateToAnalytics,
+        onNavigateToFavorites = onNavigateToFavorites,
+        onNavigateToPlaylists = onNavigateToPlaylists,
+        onNavigateToStorageLocations = onNavigateToStorageLocations,
         onNavigateToSettings = onNavigateToSettings,
-        onClearItem = { videoId -> viewModel.clearHistoryItem(videoId) },
-        onClearAllClick = { viewModel.setClearAllDialogOpen(true) },
-        onConfirmClearAll = { viewModel.clearAllHistory() },
-        onDismissClearAll = { viewModel.setClearAllDialogOpen(false) },
-        onVideoLongClick = { videoId -> viewModel.onVideoLongClick(videoId) },
-        onDismissContextMenu = { viewModel.onDismissContextMenu() },
-        onAddToPlaylist = { video -> videoForAddToPlaylist = video },
-        onToggleFavorite = { video -> viewModel.onToggleFavorite(video) },
-        onShare = { /* shared through core/ui helper if needed */ },
-        onOpenContainingFolder = { path, name -> onFolderClick(path, name) },
-        onRenameConfirm = { video, newName -> viewModel.onRenameConfirm(video, newName) },
-        onMoveConfirm = { video, targetPath -> viewModel.onMoveConfirm(video, targetPath) },
-        onCopyConfirm = { video, targetPath -> viewModel.onCopyConfirm(video, targetPath) },
-        onDeleteConfirm = { video -> viewModel.onDeleteConfirm(video) },
-        snackbarHostState = snackbarHostState,
+        onNavigateToPlayer = onNavigateToPlayer,
         modifier = modifier
     )
-
-    if (videoForAddToPlaylist != null) {
-        AddToPlaylistBottomSheet(
-            videoId = videoForAddToPlaylist!!.id,
-            videoTitle = videoForAddToPlaylist!!.title,
-            onDismissRequest = { videoForAddToPlaylist = null }
-        )
-    }
 }
 
+/**
+ * More Screen presenting a simple, flat Material 3 list of secondary destinations,
+ * technical tools, and about/licensing actions.
+ *
+ * Strictly avoids nested sections, category headers, and giant cards.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreScreen(
-    uiState: MoreUiState,
-    selectedVideoForMenu: MediaMetadata?,
-    folders: List<VideoFolder>,
-    thumbnailLoader: ThumbnailLoader?,
-    onNavigateToPlayer: (String) -> Unit,
+    recentVideo: MediaMetadata?,
     onNavigateToHistory: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToPlaylists: () -> Unit,
+    onNavigateToStorageLocations: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onClearItem: (String) -> Unit,
-    onClearAllClick: () -> Unit,
-    onConfirmClearAll: () -> Unit,
-    onDismissClearAll: () -> Unit,
-    onVideoLongClick: (String) -> Unit,
-    onDismissContextMenu: () -> Unit,
-    onAddToPlaylist: (MediaMetadata) -> Unit,
-    onToggleFavorite: (MediaMetadata) -> Unit,
-    onShare: (MediaMetadata) -> Unit,
-    onOpenContainingFolder: (folderPath: String, folderName: String) -> Unit,
-    onRenameConfirm: (video: MediaMetadata, newName: String) -> Unit,
-    onMoveConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit,
-    onCopyConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit,
-    onDeleteConfirm: (video: MediaMetadata) -> Unit,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    onNavigateToPlayer: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
 
+    var showFileInfoDialog by remember { mutableStateOf(false) }
+    var showNoMediaDialog by remember { mutableStateOf(false) }
+    var showLicensesDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showNetworkUrlDialog by remember { mutableStateOf(false) }
+
     NexusScaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             NexusTopAppBar(
                 title = "More",
@@ -173,369 +140,170 @@ fun MoreScreen(
             )
         }
     ) { innerPadding ->
-        when (uiState) {
-            is MoreUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    NexusLoadingIndicator()
-                }
-            }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = spacing.medium,
+                    end = spacing.medium,
+                    top = spacing.smallMedium,
+                    bottom = spacing.large
+                ),
+            verticalArrangement = Arrangement.spacedBy(spacing.small)
+        ) {
+            // 1. History
+            MoreListItem(
+                icon = Icons.Default.History,
+                title = "History",
+                subtitle = "Recently played videos, playback progress, and completed videos",
+                onClick = onNavigateToHistory
+            )
 
-            is MoreUiState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .padding(spacing.medium),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
+            // 2. Playback Analytics
+            MoreListItem(
+                icon = Icons.Default.Analytics,
+                title = "Playback Analytics",
+                subtitle = "Local watch time, completion rates, and format trends",
+                onClick = onNavigateToAnalytics
+            )
 
-            is MoreUiState.Success -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(
-                        start = spacing.medium,
-                        end = spacing.medium,
-                        top = spacing.small,
-                        bottom = spacing.large
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(spacing.medium)
-                ) {
-                    // 1. Playback Overview Card
-                    item(key = "stats_card") {
-                        WatchStatsCard(
-                            stats = uiState.stats,
-                            onAnalyticsClick = onNavigateToAnalytics
-                        )
-                    }
+            // 3. Favorites
+            MoreListItem(
+                icon = Icons.Default.Favorite,
+                title = "Favorites",
+                subtitle = "Quick access to starred and favorite videos",
+                onClick = onNavigateToFavorites
+            )
 
-                    // 2. Playback History Section Header
-                    item(key = "history_header") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = spacing.small),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Playback History",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (uiState.isHistoryEmpty) "No recently watched videos" else "Resume or manage watched videos",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+            // 4. Playlists
+            MoreListItem(
+                icon = Icons.Default.Subscriptions,
+                title = "Playlists",
+                subtitle = "Manage custom playlists and saved queues",
+                onClick = onNavigateToPlaylists
+            )
 
-                            if (!uiState.isHistoryEmpty) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = onClearAllClick,
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.DeleteSweep,
-                                            contentDescription = "Clear All History",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
+            // 5. Network Stream
+            MoreListItem(
+                icon = Icons.Default.Link,
+                title = "Network Stream",
+                subtitle = "Play video directly from an HTTP or HTTPS stream",
+                onClick = { showNetworkUrlDialog = true }
+            )
 
-                                    TextButton(onClick = onNavigateToHistory) {
-                                        Text("View All")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. History Items (Recent 10)
-                    if (uiState.isHistoryEmpty) {
-                        item(key = "empty_history") {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = NexusTheme.customShapes.card,
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(spacing.large),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    VerticalSpacer(spacing.small)
-                                    Text(
-                                        text = "No watch history",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    VerticalSpacer(spacing.extraSmall)
-                                    Text(
-                                        text = "Videos you watch will appear here with your saved position",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
+            // 5. Technical Information / File & Codec Info
+            MoreListItem(
+                icon = Icons.Default.Code,
+                title = "File & Codec Information",
+                subtitle = "Inspect video codecs, audio streams, and container details",
+                onClick = {
+                    if (recentVideo != null) {
+                        showFileInfoDialog = true
                     } else {
-                        items(
-                            items = uiState.history.take(10),
-                            key = { it.id }
-                        ) { item ->
-                            HistoryItemRow(
-                                item = item,
-                                thumbnailLoader = thumbnailLoader,
-                                onClick = { onNavigateToPlayer(item.id) },
-                                onLongClick = { onVideoLongClick(item.id) },
-                                onClearClick = { onClearItem(item.id) }
-                            )
-                        }
-                    }
-
-                    // 4. Quick Navigation Hub Section Header
-                    item(key = "nav_header") {
-                        Text(
-                            text = "Quick Navigation",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = spacing.small)
-                        )
-                    }
-
-                    // 5. Navigation Items
-                    item(key = "nav_history") {
-                        MoreNavRow(
-                            icon = Icons.Default.History,
-                            title = "Watch History",
-                            subtitle = "Full chronological playback log",
-                            onClick = onNavigateToHistory
-                        )
-                    }
-
-                    item(key = "nav_analytics") {
-                        MoreNavRow(
-                            icon = Icons.Default.Analytics,
-                            title = "Playback Analytics",
-                            subtitle = "Watch time, completion rates, and format trends",
-                            onClick = onNavigateToAnalytics
-                        )
-                    }
-
-                    item(key = "nav_settings") {
-                        MoreNavRow(
-                            icon = Icons.Default.Settings,
-                            title = "Settings",
-                            subtitle = "Playback, subtitles, decoders, and audio",
-                            onClick = onNavigateToSettings
-                        )
-                    }
-
-                    item(key = "nav_about") {
-                        MoreNavRow(
-                            icon = Icons.Default.Info,
-                            title = "Nexus Player",
-                            subtitle = "Local offline media engine • Version 1.0.0",
-                            onClick = {}
-                        )
+                        showNoMediaDialog = true
                     }
                 }
+            )
 
-                // Clear All History Confirmation Dialog
-                if (uiState.isClearAllDialogOpen) {
-                    ClearHistoryDialog(
-                        onConfirm = onConfirmClearAll,
-                        onDismiss = onDismissClearAll
-                    )
-                }
-            }
+            // 6. Storage & Scanning
+            MoreListItem(
+                icon = Icons.Default.Folder,
+                title = "Storage & Scanning",
+                subtitle = "Manage storage access, directory folders, and media scanning",
+                onClick = onNavigateToStorageLocations
+            )
+
+            // 7. Open Source Licenses
+            MoreListItem(
+                icon = Icons.Default.Gavel,
+                title = "Open Source Licenses",
+                subtitle = "Third-party libraries and license notices",
+                onClick = { showLicensesDialog = true }
+            )
+
+            // 8. About Nexus Player
+            MoreListItem(
+                icon = Icons.Default.Info,
+                title = "About Nexus Player",
+                subtitle = "Version 1.0.0 • Architecture & acknowledgements",
+                onClick = { showAboutDialog = true }
+            )
         }
 
-        // Long-Press Context Menu & Dialogs
-        VideoActionHost(
-            video = selectedVideoForMenu,
-            isSheetVisible = selectedVideoForMenu != null,
-            folders = folders,
-            onDismissSheet = onDismissContextMenu,
-            onPlay = onNavigateToPlayer,
-            onAddToPlaylist = onAddToPlaylist,
-            onToggleFavorite = onToggleFavorite,
-            onShare = onShare,
-            onOpenContainingFolder = onOpenContainingFolder,
-            onRenameConfirm = onRenameConfirm,
-            onMoveConfirm = onMoveConfirm,
-            onCopyConfirm = onCopyConfirm,
-            onDeleteConfirm = onDeleteConfirm
-        )
-    }
-}
+        // Technical Media Information Dialog
+        if (showFileInfoDialog && recentVideo != null) {
+            VideoFileInfoDialog(
+                video = recentVideo,
+                onDismissRequest = { showFileInfoDialog = false }
+            )
+        }
 
-@Composable
-private fun WatchStatsCard(
-    stats: WatchStats,
-    onAnalyticsClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val spacing = NexusTheme.spacing
-    val shapes = NexusTheme.customShapes
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "View detailed playback analytics",
-                onClick = onAnalyticsClick
-            ),
-        shape = shapes.card,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.medium),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatItem(
-                    icon = Icons.Default.History,
-                    value = stats.totalWatched.toString(),
-                    label = "Watched",
-                    iconTint = MaterialTheme.colorScheme.primary
-                )
-
-                StatDivider()
-
-                StatItem(
-                    icon = Icons.Default.CheckCircle,
-                    value = stats.completedCount.toString(),
-                    label = "Completed",
-                    iconTint = MaterialTheme.colorScheme.secondary
-                )
-
-                StatDivider()
-
-                StatItem(
-                    icon = Icons.Default.Favorite,
-                    value = stats.favoritesCount.toString(),
-                    label = "Favorites",
-                    iconTint = MaterialTheme.colorScheme.tertiary
-                )
-            }
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = spacing.medium, vertical = spacing.small),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Analytics,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        HorizontalSpacer(spacing.small)
+        // Informative Dialog when no media is available for technical inspection
+        if (showNoMediaDialog) {
+            AlertDialog(
+                onDismissRequest = { showNoMediaDialog = false },
+                title = {
+                    Text(
+                        text = "File & Codec Information",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                },
+                text = {
+                    Text(
+                        text = "No media files are currently loaded or indexed. Play a video or scan your storage folders to inspect detailed codec, container, and audio stream specifications.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showNoMediaDialog = false }) {
                         Text(
-                            text = "View Detailed Watch Analytics",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            text = "OK",
+                            style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
+                },
+                shape = NexusTheme.customShapes.dialog
+            )
+        }
 
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
+        // Third-party Open Source Licenses Dialog
+        if (showLicensesDialog) {
+            LicensesDialog(
+                onDismiss = { showLicensesDialog = false }
+            )
+        }
+
+        // About & Project Architecture Dialog
+        if (showAboutDialog) {
+            ProjectInfoDialog(
+                onDismiss = { showAboutDialog = false }
+            )
+        }
+
+        // Open Network URL Dialog
+        if (showNetworkUrlDialog) {
+            OpenNetworkUrlDialog(
+                onPlayUrl = { url ->
+                    showNetworkUrlDialog = false
+                    onNavigateToPlayer(url)
+                },
+                onDismissRequest = { showNetworkUrlDialog = false }
+            )
         }
     }
 }
 
+/**
+ * Flat, compact Material 3 list row designed with 4dp spacing,
+ * semantic accessibility, and theme compliance.
+ */
 @Composable
-private fun StatItem(
-    icon: ImageVector,
-    value: String,
-    label: String,
-    iconTint: androidx.compose.ui.graphics.Color
-) {
-    val spacing = NexusTheme.spacing
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(22.dp)
-        )
-        VerticalSpacer(spacing.extraSmall)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun StatDivider() {
-    Box(
-        modifier = Modifier
-            .size(width = 1.dp, height = 36.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    )
-}
-
-@Composable
-private fun MoreNavRow(
+fun MoreListItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -549,7 +317,11 @@ private fun MoreNavRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(shapes.card)
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = onClick
+            ),
         shape = shapes.card,
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -590,6 +362,8 @@ private fun MoreNavRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            HorizontalSpacer(spacing.small)
 
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,

@@ -49,6 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.ui.component.HorizontalSpacer
+import com.nexus.player.core.ui.component.NexusEmptyState
+import com.nexus.player.core.ui.component.NexusErrorState
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
@@ -139,7 +141,7 @@ fun AnalyticsScreen(
                         .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    NexusLoadingIndicator()
+                    NexusLoadingIndicator(label = "Calculating analytics...")
                 }
             }
 
@@ -154,19 +156,12 @@ fun AnalyticsScreen(
             }
 
             is AnalyticsUiState.Error -> {
-                Box(
+                NexusErrorState(
+                    message = uiState.message,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
-                        .padding(spacing.medium),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = uiState.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+                )
             }
 
             is AnalyticsUiState.Success -> {
@@ -449,55 +444,12 @@ private fun AnalyticsEmptyState(
     onBrowseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val spacing = NexusTheme.spacing
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(NexusTheme.customShapes.badge)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Analytics,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp)
-            )
-        }
-
-        VerticalSpacer(spacing.large)
-
-        Text(
-            text = "No Playback Analytics Yet",
-            style = MaterialTheme.typography.titleLarge.copy(
-                fontWeight = FontWeight.Bold
-            ),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        VerticalSpacer(spacing.small)
-
-        Text(
-            text = "Watch videos in your local library to view your watch time, completion rates, most-watched videos, and codec distributions.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.padding(horizontal = spacing.medium)
-        )
-
-        VerticalSpacer(spacing.large)
-
-        Button(
-            onClick = onBrowseClick,
-            shape = NexusTheme.customShapes.pill
-        ) {
-            Text("Browse Library")
-        }
-    }
+    NexusEmptyState(
+        icon = Icons.Default.Analytics,
+        title = "No Playback Analytics Yet",
+        description = "Watch videos in your local library to view your watch time, completion rates, most-watched videos, and codec distributions.",
+        actionText = "Browse Library",
+        onActionClick = onBrowseClick,
+        modifier = modifier
+    )
 }

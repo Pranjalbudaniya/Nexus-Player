@@ -22,6 +22,8 @@ import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.ui.component.VerticalSpacer
 
+import com.nexus.player.core.media.model.isNetworkMedia
+
 /**
  * Compact Material 3 dialog presenting cached media metadata without redundant filesystem/extractor work.
  */
@@ -32,12 +34,13 @@ fun VideoFileInfoDialog(
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
+    val isNetwork = video.isNetworkMedia
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
             Text(
-                text = "File Information",
+                text = if (isNetwork) "Stream Information" else "File Information",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -52,25 +55,48 @@ fun VideoFileInfoDialog(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 VerticalSpacer(spacing.extraSmall)
 
-                InfoRow(label = "Filename", value = video.fileName)
-                InfoRow(label = "Location", value = video.filePath ?: video.mediaUri)
-                InfoRow(
-                    label = "File Size",
-                    value = "${video.formattedSize} (${video.sizeBytes} bytes)"
-                )
-                InfoRow(label = "Duration", value = video.formattedDuration)
-                InfoRow(
-                    label = "Resolution",
-                    value = "${video.resolutionLabel} (${video.dimensionsLabel})"
-                )
-                InfoRow(label = "Video Codec", value = video.videoCodec)
-                InfoRow(
-                    label = "Audio Codec",
-                    value = if (video.audioTrackCount > 1) "${video.audioCodec} (${video.audioTrackCount} tracks)" else video.audioCodec
-                )
-                InfoRow(label = "Frame Rate", value = video.formattedFps)
-                InfoRow(label = "Bitrate", value = video.formattedBitrate)
-                InfoRow(label = "Date Added", value = video.formattedModifiedDate)
+                if (isNetwork) {
+                    InfoRow(label = "Stream Title", value = video.title.ifBlank { video.fileName })
+                    InfoRow(label = "Stream URL", value = video.mediaUri)
+                    if (video.formattedDuration.isNotBlank() && video.formattedDuration != "00:00") {
+                        InfoRow(label = "Duration", value = video.formattedDuration)
+                    }
+                    if (video.resolutionLabel != "Unknown" && video.dimensionsLabel != "Unknown") {
+                        InfoRow(
+                            label = "Resolution",
+                            value = "${video.resolutionLabel} (${video.dimensionsLabel})"
+                        )
+                    }
+                    if (video.videoCodec != "Unknown" && video.videoCodec.isNotBlank()) {
+                        InfoRow(label = "Video Codec", value = video.videoCodec)
+                    }
+                    if (video.audioCodec != "Unknown" && video.audioCodec.isNotBlank()) {
+                        InfoRow(
+                            label = "Audio Codec",
+                            value = if (video.audioTrackCount > 1) "${video.audioCodec} (${video.audioTrackCount} tracks)" else video.audioCodec
+                        )
+                    }
+                } else {
+                    InfoRow(label = "Filename", value = video.fileName)
+                    InfoRow(label = "Location", value = video.filePath ?: video.mediaUri)
+                    InfoRow(
+                        label = "File Size",
+                        value = "${video.formattedSize} (${video.sizeBytes} bytes)"
+                    )
+                    InfoRow(label = "Duration", value = video.formattedDuration)
+                    InfoRow(
+                        label = "Resolution",
+                        value = "${video.resolutionLabel} (${video.dimensionsLabel})"
+                    )
+                    InfoRow(label = "Video Codec", value = video.videoCodec)
+                    InfoRow(
+                        label = "Audio Codec",
+                        value = if (video.audioTrackCount > 1) "${video.audioCodec} (${video.audioTrackCount} tracks)" else video.audioCodec
+                    )
+                    InfoRow(label = "Frame Rate", value = video.formattedFps)
+                    InfoRow(label = "Bitrate", value = video.formattedBitrate)
+                    InfoRow(label = "Date Added", value = video.formattedModifiedDate)
+                }
             }
         },
         confirmButton = {

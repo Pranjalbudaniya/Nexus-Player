@@ -60,7 +60,9 @@ fun PlayerVideoSurface(
             },
             update = { playerView ->
                 player.attachPlayerView(playerView)
-                playerView.resizeMode = scaleMode.resizeMode
+                if (playerView.resizeMode != scaleMode.resizeMode) {
+                    playerView.resizeMode = scaleMode.resizeMode
+                }
 
                 // Calculate base scale according to display mode
                 val baseScale = when (scaleMode) {
@@ -95,10 +97,10 @@ fun PlayerVideoSurface(
                     ?: playerView.videoSurfaceView
 
                 targetView?.apply {
-                    scaleX = totalScale
-                    scaleY = totalScale
-                    translationX = panOffsetX
-                    translationY = panOffsetY
+                    if (scaleX != totalScale) scaleX = totalScale
+                    if (scaleY != totalScale) scaleY = totalScale
+                    if (translationX != panOffsetX) translationX = panOffsetX
+                    if (translationY != panOffsetY) translationY = panOffsetY
                 }
             },
             onRelease = { playerView ->

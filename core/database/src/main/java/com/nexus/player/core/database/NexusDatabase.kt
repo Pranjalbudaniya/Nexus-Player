@@ -24,7 +24,7 @@ import com.nexus.player.core.database.entity.VideoEntity
         PlaylistEntity::class,
         PlaylistItemEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class NexusDatabase : RoomDatabase() {
@@ -107,6 +107,20 @@ abstract class NexusDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_videos_isCompleted` ON `videos` (`isCompleted`)"
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_videos_title` ON `videos` (`title`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_videos_folderPath_dateAdded` ON `videos` (`folderPath`, `dateAdded`)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_videos_folderPath_title` ON `videos` (`folderPath`, `title`)"
                 )
             }
         }

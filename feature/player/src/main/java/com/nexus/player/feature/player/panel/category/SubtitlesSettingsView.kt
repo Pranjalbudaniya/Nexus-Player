@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.FilterChip
@@ -106,25 +105,5 @@ fun SubtitlesSettingsView(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-
-        Text(
-            text = "Subtitle Customization",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
-        )
-
-        PlayerSettingItem(
-            title = "Appearance & Style",
-            subtitle = "Font size, color, background, outline",
-            leadingIcon = Icons.Filled.FormatColorText,
-            onClick = {},
-            enabled = false,
-            badgeText = "Coming Soon"
-        )
     }
 }

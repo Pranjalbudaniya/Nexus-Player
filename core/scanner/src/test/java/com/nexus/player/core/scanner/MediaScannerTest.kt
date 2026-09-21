@@ -13,6 +13,7 @@ import com.nexus.player.core.scanner.datasource.DiscoveredMediaItem
 import com.nexus.player.core.scanner.datasource.MediaStoreScanner
 import com.nexus.player.core.scanner.datasource.SafFolderScanner
 import com.nexus.player.core.scanner.extractor.VideoMetadataExtractor
+import com.nexus.player.core.scanner.model.ScanOptions
 import com.nexus.player.core.scanner.model.ScanState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -256,6 +257,93 @@ class MediaScannerTest {
 
         assertEquals(ScanState.Cancelled, customScanner.scanState.value)
     }
+
+    @Test
+    fun excludedFolderFiltering() = runTest(testDispatcher) {
+        fakeStorageRepository.addExcludedFolder("/storage/Movies/Private")
+
+        val normalItem = createDiscoveredItem("normal_vid")
+        val excludedItem = DiscoveredMediaItem(
+            id = "private_vid",
+            mediaUri = "content://media/external/video/media/private_vid",
+            filePath = "/storage/Movies/Private/secret.mp4",
+            fileName = "secret.mp4",
+            title = "secret",
+            folderName = "Private",
+            folderPath = "/storage/Movies/Private",
+            sizeBytes = 1000L,
+            durationMs = 1000L,
+            width = 100,
+            height = 100,
+            dateAdded = 100L,
+            lastModified = 100L,
+            mimeType = "video/mp4"
+        )
+        fakeMediaStoreScanner.itemsToEmit = listOf(normalItem, excludedItem)
+
+        val result = mediaScanner.startScan()
+        assertEquals(1, result.totalScanned)
+        assertEquals(1, result.inserted)
+        assertNotNull(fakeVideoRepository.getVideoById("normal_vid"))
+        assertNull(fakeVideoRepository.getVideoById("private_vid"))
+    }
+
+    @Test
+    fun hiddenFilesFiltering() = runTest(testDispatcher) {
+        val normalItem = createDiscoveredItem("normal_vid")
+        val hiddenItem = DiscoveredMediaItem(
+            id = "hidden_vid",
+            mediaUri = "content://media/external/video/media/hidden_vid",
+            filePath = "/storage/Movies/.hidden.mp4",
+            fileName = ".hidden.mp4",
+            title = ".hidden",
+            folderName = "Movies",
+            folderPath = "/storage/Movies",
+            sizeBytes = 1000L,
+            durationMs = 1000L,
+            width = 100,
+            height = 100,
+            dateAdded = 100L,
+            lastModified = 100L,
+            mimeType = "video/mp4"
+        )
+        fakeMediaStoreScanner.itemsToEmit = listOf(normalItem, hiddenItem)
+
+        val result = mediaScanner.startScan()
+        assertEquals(1, result.totalScanned)
+        assertEquals(1, result.inserted)
+        assertNotNull(fakeVideoRepository.getVideoById("normal_vid"))
+        assertNull(fakeVideoRepository.getVideoById("hidden_vid"))
+    }
+
+    @Test
+    fun targetFolderScanScopedPruning() = runTest(testDispatcher) {
+        // Pre-populate DB with video in /storage/Movies and video in /storage/Downloads
+        val movieVid = Video(
+            id = "movie_1", mediaUri = "uri_movie_1", filePath = "/storage/Movies/m.mp4", fileName = "m.mp4",
+            title = "M", folderName = "Movies", folderPath = "/storage/Movies", sizeBytes = 100L,
+            durationMs = 100L, width = 100, height = 100, resolutionLabel = "SD",
+            dateAdded = 1L, lastModified = 1L
+        )
+        val downloadVid = Video(
+            id = "download_1", mediaUri = "uri_download_1", filePath = "/storage/Downloads/d.mp4", fileName = "d.mp4",
+            title = "D", folderName = "Downloads", folderPath = "/storage/Downloads", sizeBytes = 100L,
+            durationMs = 100L, width = 100, height = 100, resolutionLabel = "SD",
+            dateAdded = 1L, lastModified = 1L
+        )
+        fakeVideoRepository.upsertVideos(listOf(movieVid, downloadVid))
+
+        // Target scan ONLY on /storage/Downloads, but scanner finds no items (so download_1 is stale)
+        fakeMediaStoreScanner.itemsToEmit = emptyList()
+
+        val result = mediaScanner.startScan(ScanOptions(targetFolderUriOrPath = "/storage/Downloads"))
+        assertEquals(0, result.totalScanned)
+        assertEquals(1, result.removed) // download_1 was removed
+
+        // Verify movie_1 was NOT removed because it was outside the target folder
+        assertNotNull(fakeVideoRepository.getVideoById("movie_1"))
+        assertNull(fakeVideoRepository.getVideoById("download_1"))
+    }
 }
 
 // --- Test Fakes ---
@@ -275,6 +363,21 @@ class FakeStorageAccessRepository : StorageAccessRepository {
     override suspend fun addSelectedFolderUri(uriString: String) {}
     override suspend fun removeSelectedFolderUri(uriString: String) {}
     override suspend fun clearSelectedFolders() {}
+    override suspend fun addExcludedFolder(folderPath: String) {
+        state.value = state.value.copy(
+            excludedFolderPaths = state.value.excludedFolderPaths + folderPath
+        )
+    }
+    override suspend fun removeExcludedFolder(folderPath: String) {
+        state.value = state.value.copy(
+            excludedFolderPaths = state.value.excludedFolderPaths - folderPath
+        )
+    }
+    override suspend fun clearExcludedFolders() {
+        state.value = state.value.copy(
+            excludedFolderPaths = emptySet()
+        )
+    }
     override fun isPermissionGranted(): Boolean = state.value.isPermissionGranted
     override fun getRequiredPermissions(): List<String> = emptyList()
 }
@@ -314,7 +417,18 @@ class FakeVideoRepository : VideoRepository {
     override fun getContinueWatchingVideos(limit: Int): Flow<List<Video>> = emptyFlow()
     override fun getHistoryVideos(limit: Int): Flow<List<Video>> = emptyFlow()
     override fun getVideosByFolder(folderPath: String): Flow<List<Video>> = emptyFlow()
-    override fun getFolders(): Flow<List<VideoFolder>> = emptyFlow()
+    override fun getFolders(): Flow<List<VideoFolder>> {
+        val grouped = videos.values.groupBy { it.folderPath }
+        val folders = grouped.map { (path, vids) ->
+            VideoFolder(
+                folderPath = path,
+                folderName = vids.firstOrNull()?.folderName ?: path,
+                videoCount = vids.size,
+                lastModified = vids.maxOfOrNull { it.lastModified } ?: 0L
+            )
+        }
+        return flowOf(folders)
+    }
 
     override suspend fun getVideoById(id: String): Video? = videos[id]
     override suspend fun getVideoByUri(mediaUri: String): Video? = videos.values.find { it.mediaUri == mediaUri }
@@ -361,6 +475,57 @@ class FakeVideoRepository : VideoRepository {
         val toRemove = videos.keys.filter { !validIds.contains(it) }
         for (k in toRemove) {
             videos.remove(k)
+        }
+    }
+
+    override suspend fun deleteStaleVideosInFolders(validIds: List<String>, scannedFolderPaths: List<String>) {
+        val toRemove = videos.values.filter { video ->
+            val inScannedFolder = scannedFolderPaths.any { folder ->
+                video.folderPath.equals(folder, ignoreCase = true) ||
+                    video.folderPath.startsWith("$folder/", ignoreCase = true) ||
+                    video.mediaUri.startsWith(folder)
+            }
+            inScannedFolder && !validIds.contains(video.id)
+        }.map { it.id }
+        for (id in toRemove) {
+            videos.remove(id)
+        }
+    }
+
+    override suspend fun deleteVideosInFolder(folderPath: String) {
+        val toRemove = videos.values.filter { video ->
+            video.folderPath.equals(folderPath, ignoreCase = true) ||
+                video.folderPath.startsWith("$folderPath/", ignoreCase = true) ||
+                video.mediaUri.startsWith(folderPath)
+        }.map { it.id }
+        for (id in toRemove) {
+            videos.remove(id)
+        }
+    }
+
+    override suspend fun getAllScanLookup(): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> {
+        return videos.values.associate {
+            it.id to com.nexus.player.core.database.dao.VideoScanLookup(
+                id = it.id,
+                mediaUri = it.mediaUri,
+                lastModified = it.lastModified,
+                sizeBytes = it.sizeBytes,
+                fileName = it.fileName,
+                folderPath = it.folderPath
+            )
+        }
+    }
+
+    override suspend fun getScanLookupForFolder(folderPath: String): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> {
+        return videos.values.filter { it.folderPath == folderPath }.associate {
+            it.id to com.nexus.player.core.database.dao.VideoScanLookup(
+                id = it.id,
+                mediaUri = it.mediaUri,
+                lastModified = it.lastModified,
+                sizeBytes = it.sizeBytes,
+                fileName = it.fileName,
+                folderPath = it.folderPath
+            )
         }
     }
 

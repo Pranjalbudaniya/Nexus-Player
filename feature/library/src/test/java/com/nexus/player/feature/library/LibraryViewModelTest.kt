@@ -487,6 +487,8 @@ class LibraryViewModelTest {
             manualScanCallCount++
             return true
         }
+        override fun triggerIncrementalScan(): Boolean = true
+        override fun triggerLocationScan(locationUriOrPath: String): Boolean = true
         override fun cancelScan() {
             cancelScanCallCount++
         }

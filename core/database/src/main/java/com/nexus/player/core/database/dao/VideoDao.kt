@@ -20,6 +20,18 @@ data class FolderSummary(
 )
 
 /**
+ * Lightweight projection for high-performance media scanner diffing.
+ */
+data class VideoScanLookup(
+    val id: String,
+    val mediaUri: String,
+    val lastModified: Long,
+    val sizeBytes: Long,
+    val fileName: String,
+    val folderPath: String
+)
+
+/**
  * Data Access Object for local video media items.
  */
 @Dao
@@ -56,6 +68,12 @@ interface VideoDao {
 
     @Query("SELECT * FROM videos ORDER BY CASE WHEN lastPlayedAt IS NULL THEN 1 ELSE 0 END, lastPlayedAt ASC, dateAdded ASC")
     fun getAllVideosByLastPlayedAsc(): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos ORDER BY lastModified DESC")
+    fun getAllVideosByDateModifiedDesc(): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos ORDER BY lastModified ASC")
+    fun getAllVideosByDateModifiedAsc(): Flow<List<VideoEntity>>
 
     // --- Filtered & Categorized Queries ---
 
@@ -112,6 +130,12 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE folderPath = :folderPath ORDER BY sizeBytes ASC")
     fun getVideosByFolderSizeAsc(folderPath: String): Flow<List<VideoEntity>>
 
+    @Query("SELECT * FROM videos WHERE folderPath = :folderPath ORDER BY lastModified DESC")
+    fun getVideosByFolderDateModifiedDesc(folderPath: String): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos WHERE folderPath = :folderPath ORDER BY lastModified ASC")
+    fun getVideosByFolderDateModifiedAsc(folderPath: String): Flow<List<VideoEntity>>
+
     @Query("""
         SELECT 
             folderPath, 
@@ -124,6 +148,20 @@ interface VideoDao {
         ORDER BY folderName COLLATE NOCASE ASC
     """)
     fun getFolders(): Flow<List<FolderSummary>>
+
+    @Query("""
+        SELECT 
+            folderPath, 
+            folderName, 
+            COUNT(*) as videoCount,
+            (SELECT mediaUri FROM videos v2 WHERE v2.folderPath = videos.folderPath ORDER BY dateAdded DESC LIMIT 1) as previewMediaUri,
+            MAX(lastModified) as lastModified
+        FROM videos 
+        WHERE folderPath = :folderPath
+        GROUP BY folderPath, folderName 
+        LIMIT 1
+    """)
+    fun getFolderSummaryByPath(folderPath: String): Flow<FolderSummary?>
 
     // --- Global Search Queries ---
 
@@ -164,6 +202,15 @@ interface VideoDao {
 
     @Query("SELECT COUNT(*) FROM videos")
     suspend fun getVideosCount(): Int
+
+    @Query("SELECT id, mediaUri, lastModified, sizeBytes, fileName, folderPath FROM videos")
+    suspend fun getAllScanLookup(): List<VideoScanLookup>
+
+    @Query("SELECT id, mediaUri, lastModified, sizeBytes, fileName, folderPath FROM videos WHERE folderPath = :folderPath")
+    suspend fun getScanLookupForFolder(folderPath: String): List<VideoScanLookup>
+
+    @Query("SELECT id FROM videos WHERE folderPath IN (:folderPaths)")
+    suspend fun getVideoIdsInFolders(folderPaths: List<String>): List<String>
 
     // --- Insertions & Upserts ---
 
@@ -255,11 +302,23 @@ interface VideoDao {
     @Query("DELETE FROM videos WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM videos WHERE id IN (:ids)")
+    suspend fun deleteVideosByIds(ids: List<String>)
+
     @Query("DELETE FROM videos WHERE mediaUri = :mediaUri")
     suspend fun deleteByUri(mediaUri: String)
 
     @Query("DELETE FROM videos WHERE id NOT IN (:validIds)")
     suspend fun deleteStaleVideos(validIds: List<String>)
+
+    @Query("DELETE FROM videos WHERE folderPath IN (:scannedFolderPaths) AND id NOT IN (:validIds)")
+    suspend fun deleteStaleVideosInFolders(validIds: List<String>, scannedFolderPaths: List<String>)
+
+    @Query("DELETE FROM videos WHERE folderPath IN (:scannedFolderPaths)")
+    suspend fun deleteVideosInFolders(scannedFolderPaths: List<String>)
+
+    @Query("DELETE FROM videos WHERE folderPath = :folderPath")
+    suspend fun deleteVideosInFolder(folderPath: String)
 
     @Query("DELETE FROM videos")
     suspend fun clearAll()

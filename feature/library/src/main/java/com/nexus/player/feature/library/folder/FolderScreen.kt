@@ -40,10 +40,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
+import com.nexus.player.core.ui.component.NexusEmptyState
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.VerticalSpacer
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 import com.nexus.player.feature.library.component.LibraryContextMenuSheet
 import com.nexus.player.feature.library.component.LibraryFolderCard
 import com.nexus.player.feature.library.component.LibraryFolderListItem
@@ -110,7 +112,8 @@ fun FolderRoute(
                     result.onSuccess { renamed ->
                         snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Rename", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -122,7 +125,8 @@ fun FolderRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Moved to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Move", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -134,7 +138,8 @@ fun FolderRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Copied to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Copy", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -152,7 +157,8 @@ fun FolderRoute(
                             viewModel.restoreDeletedVideo(video.id) { restoreResult ->
                                 if (restoreResult.isFailure) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                        val restoreMsg = UserFeedbackFormatter.formatFileError("Restore", restoreResult.exceptionOrNull())
+                                        snackbarHostState.showSnackbar(restoreMsg.ifBlank { "Failed to restore video" })
                                     }
                                 }
                             }
@@ -160,7 +166,8 @@ fun FolderRoute(
                             viewModel.purgeStagedDeletions()
                         }
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Delete", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -251,7 +258,7 @@ fun FolderScreen(
                 }
 
                 uiState.isEmpty -> {
-                    EmptyFolderView(modifier = Modifier.align(Alignment.Center))
+                    EmptyFolderView(onNavigateBack = onNavigateBack, modifier = Modifier.align(Alignment.Center))
                 }
 
                 uiState.layoutMode == LibraryLayoutMode.GRID -> {
@@ -411,38 +418,16 @@ fun FolderScreen(
 }
 
 @Composable
-private fun EmptyFolderView(modifier: Modifier = Modifier) {
-    val spacing = NexusTheme.spacing
-
-    Column(
+private fun EmptyFolderView(
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    NexusEmptyState(
+        icon = Icons.Default.FolderOpen,
+        title = "Folder is Empty",
+        description = "There are no video files or subfolders inside this location.",
+        actionText = "Return to Library",
+        onActionClick = onNavigateBack,
         modifier = modifier
-            .fillMaxWidth()
-            .padding(spacing.large),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Default.FolderOpen,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            modifier = Modifier.size(64.dp)
-        )
-
-        VerticalSpacer(spacing.medium)
-
-        Text(
-            text = "Folder is Empty",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-
-        VerticalSpacer(spacing.small)
-
-        Text(
-            text = "There are no video files or subfolders inside this location.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
+    )
 }

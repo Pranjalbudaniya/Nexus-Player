@@ -18,7 +18,8 @@ enum class LibrarySortField(val displayName: String) {
     NAME("Name"),
     DURATION("Duration"),
     FILE_SIZE("File Size"),
-    LAST_PLAYED("Last Played")
+    LAST_PLAYED("Last Played"),
+    DATE_MODIFIED("Date Modified")
 }
 
 /**
@@ -59,6 +60,10 @@ data class LibrarySortOption(
         LibrarySortField.LAST_PLAYED -> when (direction) {
             LibrarySortDirection.DESCENDING -> VideoSortOrder.LAST_PLAYED_DESC
             LibrarySortDirection.ASCENDING -> VideoSortOrder.LAST_PLAYED_ASC
+        }
+        LibrarySortField.DATE_MODIFIED -> when (direction) {
+            LibrarySortDirection.DESCENDING -> VideoSortOrder.DATE_MODIFIED_DESC
+            LibrarySortDirection.ASCENDING -> VideoSortOrder.DATE_MODIFIED_ASC
         }
     }
 }

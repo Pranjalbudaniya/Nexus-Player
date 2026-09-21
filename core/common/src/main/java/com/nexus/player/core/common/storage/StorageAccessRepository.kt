@@ -41,6 +41,21 @@ interface StorageAccessRepository {
     suspend fun clearSelectedFolders()
 
     /**
+     * Adds a folder path to the media scanner exclusion list.
+     */
+    suspend fun addExcludedFolder(folderPath: String) {}
+
+    /**
+     * Removes a folder path from the media scanner exclusion list.
+     */
+    suspend fun removeExcludedFolder(folderPath: String) {}
+
+    /**
+     * Clears all excluded folder paths.
+     */
+    suspend fun clearExcludedFolders() {}
+
+    /**
      * Checks if the required media permission is currently granted.
      */
     fun isPermissionGranted(): Boolean

@@ -23,7 +23,10 @@ import androidx.room.PrimaryKey
         Index(value = ["dateAdded"]),
         Index(value = ["lastPlayedAt"]),
         Index(value = ["folderPath"]),
-        Index(value = ["isCompleted"])
+        Index(value = ["isCompleted"]),
+        Index(value = ["title"]),
+        Index(value = ["folderPath", "dateAdded"]),
+        Index(value = ["folderPath", "title"])
     ]
 )
 data class VideoEntity(

@@ -56,6 +56,25 @@ class MoreViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val favoriteVideos: StateFlow<List<Video>> = videoRepository
+        .getFavoriteVideos()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000L),
+            initialValue = emptyList()
+        )
+
+    val recentVideoForInfo: StateFlow<MediaMetadata?> = combine(
+        videoRepository.getAllHistoryVideos(),
+        videoRepository.getAllVideos()
+    ) { history, allVideos ->
+        (history.firstOrNull() ?: allVideos.firstOrNull())?.toMediaMetadata()
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000L),
+        initialValue = null
+    )
+
     val uiState: StateFlow<MoreUiState> = combine(
         videoRepository.getAllHistoryVideos(),
         videoRepository.getFavoriteVideos(),
@@ -99,9 +118,47 @@ class MoreViewModel @Inject constructor(
         }
     }
 
-    fun clearHistoryItem(videoId: String) {
+    fun playFavoriteVideo(videoId: String) {
+        val favs = favoriteVideos.value
+        val items = if (favs.isNotEmpty()) favs.map { it.id } else listOf(videoId)
+        playbackQueueManager.setQueue(
+            items = items,
+            initialVideoId = videoId,
+            source = QueueSource.Favorites
+        )
+    }
+
+    private var lastClearedHistoryItem: HistoryItem? = null
+
+    fun clearHistoryItem(videoId: String, onCleared: ((HistoryItem) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
+            val history = (uiState.value as? MoreUiState.Success)?.history
+            var item = history?.find { it.id == videoId }
+            if (item == null) {
+                item = videoRepository.getVideoById(videoId)?.toHistoryItem()
+            }
+            if (item != null) {
+                lastClearedHistoryItem = item
+            }
             videoRepository.clearHistoryForVideo(videoId)
+            if (item != null) {
+                onCleared?.invoke(item)
+            }
+        }
+    }
+
+    fun undoClearHistoryItem(onRestored: ((HistoryItem) -> Unit)? = null) {
+        val item = lastClearedHistoryItem ?: return
+        viewModelScope.launch(ioDispatcher) {
+            videoRepository.updatePlaybackProgress(
+                id = item.id,
+                positionMs = item.playbackPositionMs,
+                percentage = item.progress,
+                lastPlayedAt = item.lastPlayedAt,
+                isCompleted = item.isCompleted
+            )
+            lastClearedHistoryItem = null
+            onRestored?.invoke(item)
         }
     }
 
@@ -133,39 +190,58 @@ class MoreViewModel @Inject constructor(
         _selectedVideoForMenu.value = null
     }
 
-    fun onToggleFavorite(metadata: MediaMetadata) {
+    fun onToggleFavorite(metadata: MediaMetadata, onResult: ((Boolean) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
             val newFavorite = !metadata.isFavorite
             videoRepository.setFavorite(metadata.id, newFavorite)
             _selectedVideoForMenu.value = _selectedVideoForMenu.value?.copy(isFavorite = newFavorite)
+            onResult?.invoke(newFavorite)
         }
     }
 
-    fun onRenameConfirm(metadata: MediaMetadata, newName: String) {
+    fun onRenameConfirm(metadata: MediaMetadata, newName: String, onResult: ((Result<MediaMetadata>) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
-            fileOperationsManager.renameVideo(metadata.id, newName)
+            val result = fileOperationsManager.renameVideo(metadata.id, newName)
             _selectedVideoForMenu.value = null
+            onResult?.invoke(result)
         }
     }
 
-    fun onMoveConfirm(metadata: MediaMetadata, targetFolderPath: String) {
+    fun onMoveConfirm(metadata: MediaMetadata, targetFolderPath: String, onResult: ((Result<MediaMetadata>) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
-            fileOperationsManager.moveVideo(metadata.id, targetFolderPath)
+            val result = fileOperationsManager.moveVideo(metadata.id, targetFolderPath)
             _selectedVideoForMenu.value = null
+            onResult?.invoke(result)
         }
     }
 
-    fun onCopyConfirm(metadata: MediaMetadata, targetFolderPath: String) {
+    fun onCopyConfirm(metadata: MediaMetadata, targetFolderPath: String, onResult: ((Result<MediaMetadata>) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
-            fileOperationsManager.copyVideo(metadata.id, targetFolderPath)
+            val result = fileOperationsManager.copyVideo(metadata.id, targetFolderPath)
             _selectedVideoForMenu.value = null
+            onResult?.invoke(result)
         }
     }
 
-    fun onDeleteConfirm(metadata: MediaMetadata) {
+    fun onDeleteConfirm(metadata: MediaMetadata, onResult: ((Result<Unit>) -> Unit)? = null) {
         viewModelScope.launch(ioDispatcher) {
-            fileOperationsManager.deleteVideo(metadata.id)
+            playbackQueueManager.removeItem(metadata.id)
+            val result = fileOperationsManager.deleteVideo(metadata.id, stageForUndo = true)
             _selectedVideoForMenu.value = null
+            onResult?.invoke(result)
+        }
+    }
+
+    fun restoreDeletedVideo(videoId: String, onResult: ((Result<MediaMetadata>) -> Unit)? = null) {
+        viewModelScope.launch(ioDispatcher) {
+            val result = fileOperationsManager.restoreDeletedVideo(videoId)
+            onResult?.invoke(result)
+        }
+    }
+
+    fun purgeStagedDeletions() {
+        viewModelScope.launch(ioDispatcher) {
+            fileOperationsManager.purgeStagedDeletions()
         }
     }
 

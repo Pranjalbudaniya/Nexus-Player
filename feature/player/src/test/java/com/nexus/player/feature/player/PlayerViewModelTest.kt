@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nexus.player.core.database.model.Video
 import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.database.model.VideoSortOrder
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
 import com.nexus.player.core.database.repository.VideoRepository
 import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.core.playback.model.ErrorCategory
@@ -1380,6 +1381,312 @@ class PlayerViewModelTest {
         assertEquals("q_vid_valid", viewModel.video.value?.id)
     }
 
+    @Test
+    fun subtitleAutoSelection_forcedOnly_selectsForcedTrack() = testScope.runTest {
+        val video = createSampleVideo(id = "sub_vid_1")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.areSubtitlesEnabledFlow.value = true
+        fakePreferencesRepository.defaultSubtitleTrackBehaviorFlow.value = DefaultSubtitleTrackBehavior.FORCED_ONLY
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "sub_vid_1"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        val subNormal = PlayerTrack(id = "sub_norm", label = "English", language = "eng", isForced = false)
+        val subForced = PlayerTrack(id = "sub_frc", label = "English [Forced]", language = "eng", isForced = true)
+        fakePlayer.simulateTracks(subtitleTracks = listOf(subNormal, subForced))
+        advanceUntilIdle()
+
+        assertEquals("sub_frc", fakePlayer.state.value.selectedSubtitleTrackId)
+        assertTrue(fakePlayer.state.value.areSubtitlesEnabled)
+    }
+
+    @Test
+    fun subtitleAutoSelection_subtitlesDisabled_disablesSubtitlesInPlayer() = testScope.runTest {
+        val video = createSampleVideo(id = "sub_vid_2")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.areSubtitlesEnabledFlow.value = false
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "sub_vid_2"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        val subTrack = PlayerTrack(id = "sub_1", label = "English", language = "eng")
+        fakePlayer.simulateTracks(subtitleTracks = listOf(subTrack))
+        advanceUntilIdle()
+
+        assertFalse(fakePlayer.state.value.areSubtitlesEnabled)
+    }
+
+    @Test
+    fun subtitleAutoSelection_trackBehaviorOff_disablesSubtitlesInPlayer() = testScope.runTest {
+        val video = createSampleVideo(id = "sub_vid_3")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.areSubtitlesEnabledFlow.value = true
+        fakePreferencesRepository.defaultSubtitleTrackBehaviorFlow.value = DefaultSubtitleTrackBehavior.OFF
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "sub_vid_3"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        val subTrack = PlayerTrack(id = "sub_1", label = "English", language = "eng")
+        fakePlayer.simulateTracks(subtitleTracks = listOf(subTrack))
+        advanceUntilIdle()
+
+        assertFalse(fakePlayer.state.value.areSubtitlesEnabled)
+    }
+
+    @Test
+    fun subtitleAutoSelection_firstAvailable_selectsFirstTrackWhenNoLangMatch() = testScope.runTest {
+        val video = createSampleVideo(id = "sub_vid_4")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.areSubtitlesEnabledFlow.value = true
+        fakePreferencesRepository.defaultSubtitleTrackBehaviorFlow.value = DefaultSubtitleTrackBehavior.FIRST_AVAILABLE
+        fakePreferencesRepository.preferredSubtitleLanguageFlow.value = "Japanese"
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "sub_vid_4"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        val subFr = PlayerTrack(id = "sub_fr", label = "French", language = "fra")
+        val subDe = PlayerTrack(id = "sub_de", label = "German", language = "deu")
+        fakePlayer.simulateTracks(subtitleTracks = listOf(subFr, subDe))
+        advanceUntilIdle()
+
+        assertEquals("sub_fr", fakePlayer.state.value.selectedSubtitleTrackId)
+        assertTrue(fakePlayer.state.value.areSubtitlesEnabled)
+    }
+
+    @Test
+    fun audioSettings_perVideoAudioDelayRestoredWhenRememberEnabled() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_audio_pv")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.rememberPerVideoAudioSettingsFlow.value = true
+        fakePreferencesRepository.audioDelayFlow.value = 0L
+        fakePreferencesRepository.setVideoAudioDelayMs("vid_audio_pv", 150L)
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "vid_audio_pv"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        assertEquals(150L, fakePlayer.state.value.audioDelayMs)
+    }
+
+    @Test
+    fun audioSettings_globalAudioDelayUsedWhenRememberDisabled() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_audio_global")
+        fakeVideoRepository.addVideo(video)
+        fakePreferencesRepository.rememberPerVideoAudioSettingsFlow.value = false
+        fakePreferencesRepository.audioDelayFlow.value = 50L
+        fakePreferencesRepository.setVideoAudioDelayMs("vid_audio_global", 200L)
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "vid_audio_global"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        assertEquals(50L, fakePlayer.state.value.audioDelayMs)
+    }
+
+    @Test
+    fun audioSettings_setEqualizerBandLevelPersistsCustomPresetAndLevel() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_audio_eq")
+        fakeVideoRepository.addVideo(video)
+
+        val savedStateHandle = SavedStateHandle(mapOf("videoId" to "vid_audio_eq"))
+        val viewModel = createViewModel(savedStateHandle)
+        advanceUntilIdle()
+
+        viewModel.setEqualizerBandLevel(0, 450)
+        advanceUntilIdle()
+
+        assertEquals(450, fakePlayer.audioEffectsController.bandLevels.value[0])
+        assertEquals(450, fakePreferencesRepository.customBandLevelsFlow.value[0])
+        assertEquals("Custom", fakePreferencesRepository.equalizerPresetFlow.value)
+    }
+
+    // =========================================================================
+    // Network Video Playback Tests
+    // =========================================================================
+
+    @Test
+    fun networkPlayback_cleanNetworkTitle_extractsFilenameOrHost() {
+        assertEquals("video.mp4", PlayerViewModel.cleanNetworkTitle("http://example.com/videos/video.mp4"))
+        assertEquals("bunny.mkv", PlayerViewModel.cleanNetworkTitle("https://cdn.example.org/stream/bunny.mkv?token=123&exp=456#part1"))
+        assertEquals("movie clip.mp4", PlayerViewModel.cleanNetworkTitle("https://example.com/movie%20clip.mp4"))
+        assertEquals("stream.live.com", PlayerViewModel.cleanNetworkTitle("https://stream.live.com/"))
+    }
+
+    @Test
+    fun networkPlayback_sanitizeMediaId_decodesUrlEncodedStrings() {
+        assertEquals("https://example.com/video.mp4", PlayerViewModel.sanitizeMediaId("https%3A%2F%2Fexample.com%2Fvideo.mp4"))
+        assertEquals("http://example.com/stream", PlayerViewModel.sanitizeMediaId("http%3A%2F%2Fexample.com%2Fstream"))
+        assertEquals("local_video_123", PlayerViewModel.sanitizeMediaId("local_video_123"))
+    }
+
+    @Test
+    fun networkPlayback_validHttpUrl_preparesPlayerAndSetsReadyState() = testScope.runTest {
+        val viewModel = createViewModel(SavedStateHandle())
+        val url = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+
+        assertEquals(1, fakePlayer.preparedMediaItems.size)
+        val prepared = fakePlayer.preparedMediaItems.last()
+        assertEquals(url, prepared.mediaId)
+        assertEquals(url, prepared.uri)
+        assertEquals("BigBuckBunny.mp4", prepared.title)
+        assertEquals(listOf(0L), fakePlayer.initialPositions)
+        assertEquals(1, fakePlayer.playCount)
+
+        // Ensure no local database entity is set or persisted
+        assertEquals(null, viewModel.video.value)
+        assertTrue(fakeVideoRepository.progressUpdates.isEmpty())
+
+        // Verify Ready state has isNetworkMedia flag set to true
+        val ready = viewModel.uiState.value as PlayerUiState.Ready
+        assertTrue(ready.isNetworkMedia)
+        assertEquals("BigBuckBunny.mp4", ready.videoTitle)
+        assertEquals(url, ready.videoId)
+    }
+
+    @Test
+    fun networkPlayback_validHttpsUrlWithQueryParams_extractsCleanTitle() = testScope.runTest {
+        val viewModel = createViewModel(SavedStateHandle())
+        val url = "https://cdn.example.org/path/nature_documentary.mkv?auth_token=xyz987&signature=abc#t=30"
+
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+
+        assertEquals(1, fakePlayer.preparedMediaItems.size)
+        assertEquals("nature_documentary.mkv", fakePlayer.preparedMediaItems.last().title)
+        val ready = viewModel.uiState.value as PlayerUiState.Ready
+        assertEquals("nature_documentary.mkv", ready.videoTitle)
+        assertTrue(ready.isNetworkMedia)
+    }
+
+    @Test
+    fun networkPlayback_urlEncodedNavRoute_decodesProperly() = testScope.runTest {
+        val rawEncoded = "https%3A%2F%2Fexample.com%2Fstream%2Fclip.mkv"
+        val expectedDecoded = "https://example.com/stream/clip.mkv"
+
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to rawEncoded)))
+        advanceUntilIdle()
+
+        assertEquals(1, fakePlayer.preparedMediaItems.size)
+        assertEquals(expectedDecoded, fakePlayer.preparedMediaItems.last().uri)
+        assertEquals("clip.mkv", fakePlayer.preparedMediaItems.last().title)
+    }
+
+    @Test
+    fun networkPlayback_unsupportedScheme_setsInvalidUrlError() = testScope.runTest {
+        val viewModel = createViewModel(SavedStateHandle())
+        viewModel.loadMedia("ftp://files.example.com/unsupported_stream.mp4")
+        advanceUntilIdle()
+
+        assertTrue(fakePlayer.preparedMediaItems.isEmpty())
+        val errorState = viewModel.uiState.value as PlayerUiState.Error
+        assertEquals(ErrorCategory.InvalidUrl, errorState.category)
+        assertTrue(errorState.userMessage.contains("Unsupported stream protocol"))
+        assertFalse(errorState.canRetry)
+    }
+
+    @Test
+    fun networkPlayback_missingHost_setsInvalidUrlError() = testScope.runTest {
+        val viewModel = createViewModel(SavedStateHandle())
+        viewModel.loadMedia("http:///missing_host.mp4")
+        advanceUntilIdle()
+
+        assertTrue(fakePlayer.preparedMediaItems.isEmpty())
+        val errorState = viewModel.uiState.value as PlayerUiState.Error
+        assertEquals(ErrorCategory.InvalidUrl, errorState.category)
+        assertTrue(errorState.userMessage.contains("Invalid stream address"))
+        assertFalse(errorState.canRetry)
+    }
+
+    @Test
+    fun networkPlayback_errorTechnicalDetail_stripsSensitiveTokens() = testScope.runTest {
+        val viewModel = createViewModel(SavedStateHandle())
+        viewModel.loadMedia("rtsp://stream.example.com/live?token=secretKey123&pass=confidential#part2")
+        advanceUntilIdle()
+
+        val errorState = viewModel.uiState.value as PlayerUiState.Error
+        assertEquals(ErrorCategory.InvalidUrl, errorState.category)
+        val detail = errorState.technicalDetail ?: ""
+        assertFalse(detail.contains("secretKey123"))
+        assertFalse(detail.contains("confidential"))
+        assertTrue(detail.contains("rtsp://stream.example.com/live"))
+    }
+
+    @Test
+    fun networkPlayback_sessionPositionRetention_restoresPositionOnReload() = testScope.runTest {
+        val url = "https://example.com/session_test.mp4"
+        val viewModel = createViewModel(SavedStateHandle())
+
+        // Initial load
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+        assertEquals(0L, fakePlayer.initialPositions.last())
+
+        // Simulate session position progress
+        viewModel.sessionPositions[url] = 52_000L
+
+        // Reload the same URL in the same session
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+
+        // Should restore the session position (52_000L)
+        assertEquals(52_000L, fakePlayer.initialPositions.last())
+    }
+
+    @Test
+    fun networkPlayback_completion_clearsSessionPosition() = testScope.runTest {
+        val url = "https://example.com/completed_test.mp4"
+        val viewModel = createViewModel(SavedStateHandle())
+
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+        viewModel.sessionPositions[url] = 25_000L
+
+        // Simulate stream ended
+        fakePlayer.simulateEnded()
+        advanceUntilIdle()
+
+        // Session position should be cleared on completion
+        assertEquals(null, viewModel.sessionPositions[url])
+    }
+
+    @Test
+    fun networkPlayback_networkError_allowsRetryAndReloads() = testScope.runTest {
+        val url = "https://example.com/timeout_stream.mp4"
+        val viewModel = createViewModel(SavedStateHandle())
+
+        viewModel.loadMedia(url)
+        advanceUntilIdle()
+        assertEquals(1, fakePlayer.preparedMediaItems.size)
+
+        // Simulate network failure
+        val networkError = PlaybackError(
+            category = ErrorCategory.NetworkFailure,
+            userMessage = "Network connection failed",
+            technicalDetail = "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT"
+        )
+        fakePlayer.simulateError(networkError)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value as PlayerUiState.Error
+        assertEquals(ErrorCategory.NetworkFailure, state.category)
+        assertTrue(state.canRetry)
+
+        // Trigger retry
+        viewModel.retry()
+        advanceUntilIdle()
+
+        // Verifies that media is prepared again
+        assertEquals(2, fakePlayer.preparedMediaItems.size)
+        assertEquals(url, fakePlayer.preparedMediaItems.last().uri)
+    }
+
     // =========================================================================
     // Test Fake VideoRepository
     // =========================================================================
@@ -1472,6 +1779,7 @@ class PlayerViewModelTest {
         val preferredAudioLanguageFlow = MutableStateFlow<String?>(null)
         val preferredSubtitleLanguageFlow = MutableStateFlow<String?>(null)
         val areSubtitlesEnabledFlow = MutableStateFlow(true)
+        val defaultSubtitleTrackBehaviorFlow = MutableStateFlow(DefaultSubtitleTrackBehavior.AUTO)
         val audioDelayFlow = MutableStateFlow(0L)
         val subtitleDelayFlow = MutableStateFlow(0L)
         val subtitleAppearanceFlow = MutableStateFlow(SubtitleAppearance())
@@ -1482,6 +1790,9 @@ class PlayerViewModelTest {
         val equalizerPresetFlow = MutableStateFlow("Flat")
         val repeatModeFlow = MutableStateFlow(RepeatMode.OFF)
         val isShuffleFlow = MutableStateFlow(false)
+        val customBandLevelsFlow = MutableStateFlow<Map<Int, Int>>((0 until 5).associateWith { 0 })
+        val rememberPerVideoAudioSettingsFlow = MutableStateFlow(false)
+        val videoAudioDelayMap = mutableMapOf<String, MutableStateFlow<Long?>>()
         val externalSubtitlesMap = mutableMapOf<String, MutableStateFlow<List<ExternalSubtitle>>>()
 
         override val playbackSpeed: Flow<Float> = speedFlow
@@ -1490,6 +1801,7 @@ class PlayerViewModelTest {
         override val preferredAudioLanguage: Flow<String?> = preferredAudioLanguageFlow
         override val preferredSubtitleLanguage: Flow<String?> = preferredSubtitleLanguageFlow
         override val areSubtitlesEnabled: Flow<Boolean> = areSubtitlesEnabledFlow
+        override val defaultSubtitleTrackBehavior: Flow<DefaultSubtitleTrackBehavior> = defaultSubtitleTrackBehaviorFlow
         override val audioDelayMs: Flow<Long> = audioDelayFlow
         override val subtitleDelayMs: Flow<Long> = subtitleDelayFlow
         override val subtitleAppearance: Flow<SubtitleAppearance> = subtitleAppearanceFlow
@@ -1500,6 +1812,8 @@ class PlayerViewModelTest {
         override val equalizerPreset: Flow<String> = equalizerPresetFlow
         override val repeatMode: Flow<RepeatMode> = repeatModeFlow
         override val isShuffleEnabled: Flow<Boolean> = isShuffleFlow
+        override val customBandLevels: Flow<Map<Int, Int>> = customBandLevelsFlow
+        override val rememberPerVideoAudioSettings: Flow<Boolean> = rememberPerVideoAudioSettingsFlow
 
         override suspend fun setPlaybackSpeed(speed: Float) {
             speedFlow.value = speed
@@ -1523,6 +1837,10 @@ class PlayerViewModelTest {
 
         override suspend fun setSubtitlesEnabled(enabled: Boolean) {
             areSubtitlesEnabledFlow.value = enabled
+        }
+
+        override suspend fun setDefaultSubtitleTrackBehavior(behavior: DefaultSubtitleTrackBehavior) {
+            defaultSubtitleTrackBehaviorFlow.value = behavior
         }
 
         override suspend fun setAudioDelayMs(delayMs: Long) {
@@ -1555,6 +1873,31 @@ class PlayerViewModelTest {
 
         override suspend fun setEqualizerPreset(preset: String) {
             equalizerPresetFlow.value = preset
+        }
+
+        override suspend fun setCustomBandLevels(levels: Map<Int, Int>) {
+            customBandLevelsFlow.value = levels
+            equalizerPresetFlow.value = "Custom"
+        }
+
+        override suspend fun setCustomBandLevel(bandIndex: Int, levelmB: Int) {
+            val current = customBandLevelsFlow.value.toMutableMap()
+            current[bandIndex] = levelmB
+            customBandLevelsFlow.value = current
+            equalizerPresetFlow.value = "Custom"
+        }
+
+        override suspend fun setRememberPerVideoAudioSettings(remember: Boolean) {
+            rememberPerVideoAudioSettingsFlow.value = remember
+        }
+
+        override fun getVideoAudioDelayMs(videoId: String): Flow<Long?> {
+            return videoAudioDelayMap.getOrPut(videoId) { MutableStateFlow(null) }
+        }
+
+        override suspend fun setVideoAudioDelayMs(videoId: String, delayMs: Long?) {
+            val flow = videoAudioDelayMap.getOrPut(videoId) { MutableStateFlow(null) }
+            flow.value = delayMs
         }
 
         override suspend fun setRepeatMode(mode: RepeatMode) {

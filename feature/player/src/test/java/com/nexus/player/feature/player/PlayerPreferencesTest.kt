@@ -3,6 +3,12 @@ package com.nexus.player.feature.player
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
+import com.nexus.player.core.playback.model.SubtitleAppearance
+import com.nexus.player.core.playback.model.SubtitleBackgroundStyle
+import com.nexus.player.core.playback.model.SubtitlePosition
+import com.nexus.player.core.playback.model.SubtitleTextColor
+import com.nexus.player.core.playback.model.SubtitleTextSize
 import com.nexus.player.feature.player.component.formatPlaybackSpeed
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepository
 import com.nexus.player.feature.player.preferences.PlayerPreferencesRepositoryImpl
@@ -197,6 +203,78 @@ class PlayerPreferencesTest {
 
         repository.setShuffleEnabled(false)
         assertFalse(repository.isShuffleEnabled.first())
+    }
+
+    @Test
+    fun subtitleAppearance_defaultAndCustomPersist() = runTest(testDispatcher) {
+        val defaultAppearance = repository.subtitleAppearance.first()
+        assertEquals(SubtitleTextSize.Normal, defaultAppearance.textSize)
+        assertEquals(0.75f, defaultAppearance.backgroundOpacity, 0.001f)
+
+        val custom = SubtitleAppearance(
+            textSize = SubtitleTextSize.Large,
+            textColor = SubtitleTextColor.Yellow,
+            backgroundStyle = SubtitleBackgroundStyle.Outline,
+            backgroundOpacity = 0.4f,
+            position = SubtitlePosition.Top
+        )
+        repository.setSubtitleAppearance(custom)
+        val loaded = repository.subtitleAppearance.first()
+        assertEquals(SubtitleTextSize.Large, loaded.textSize)
+        assertEquals(SubtitleTextColor.Yellow, loaded.textColor)
+        assertEquals(SubtitleBackgroundStyle.Outline, loaded.backgroundStyle)
+        assertEquals(0.4f, loaded.backgroundOpacity, 0.001f)
+        assertEquals(SubtitlePosition.Top, loaded.position)
+    }
+
+    @Test
+    fun defaultSubtitleTrackBehavior_updatesAndPersists() = runTest(testDispatcher) {
+        assertEquals(DefaultSubtitleTrackBehavior.AUTO, repository.defaultSubtitleTrackBehavior.first())
+
+        repository.setDefaultSubtitleTrackBehavior(DefaultSubtitleTrackBehavior.FORCED_ONLY)
+        assertEquals(DefaultSubtitleTrackBehavior.FORCED_ONLY, repository.defaultSubtitleTrackBehavior.first())
+
+        repository.setDefaultSubtitleTrackBehavior(DefaultSubtitleTrackBehavior.OFF)
+        assertEquals(DefaultSubtitleTrackBehavior.OFF, repository.defaultSubtitleTrackBehavior.first())
+    }
+
+    @Test
+    fun customBandLevels_defaultAndCustomPersist() = runTest(testDispatcher) {
+        val defaults = repository.customBandLevels.first()
+        assertEquals(5, defaults.size)
+        (0 until 5).forEach { assertEquals(0, defaults[it]) }
+
+        val custom = mapOf(0 to 300, 1 to -200, 2 to 0, 3 to 400, 4 to -100)
+        repository.setCustomBandLevels(custom)
+
+        val loaded = repository.customBandLevels.first()
+        assertEquals(300, loaded[0])
+        assertEquals(-200, loaded[1])
+        assertEquals(0, loaded[2])
+        assertEquals(400, loaded[3])
+        assertEquals(-100, loaded[4])
+        assertEquals("Custom", repository.equalizerPreset.first())
+
+        repository.setCustomBandLevel(0, 500)
+        assertEquals(500, repository.customBandLevels.first()[0])
+    }
+
+    @Test
+    fun rememberPerVideoAudioSettings_updatesAndPersists() = runTest(testDispatcher) {
+        assertFalse(repository.rememberPerVideoAudioSettings.first())
+
+        repository.setRememberPerVideoAudioSettings(true)
+        assertTrue(repository.rememberPerVideoAudioSettings.first())
+    }
+
+    @Test
+    fun perVideoAudioDelay_persistsIndividually() = runTest(testDispatcher) {
+        repository.setVideoAudioDelayMs("vid_a", 250L)
+        repository.setVideoAudioDelayMs("vid_b", -150L)
+
+        assertEquals(250L, repository.getVideoAudioDelayMs("vid_a").first())
+        assertEquals(-150L, repository.getVideoAudioDelayMs("vid_b").first())
+        assertEquals(null, repository.getVideoAudioDelayMs("vid_c").first())
     }
 }
 

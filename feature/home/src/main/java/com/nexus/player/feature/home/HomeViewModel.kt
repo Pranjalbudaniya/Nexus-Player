@@ -229,4 +229,8 @@ class HomeViewModel @Inject constructor(
     fun shareVideo(context: Context, video: MediaMetadata) {
         fileOperationsManager.shareVideo(context, video)
     }
+
+    fun triggerRescan(): Boolean {
+        return mediaScanOrchestrator.triggerManualScan()
+    }
 }

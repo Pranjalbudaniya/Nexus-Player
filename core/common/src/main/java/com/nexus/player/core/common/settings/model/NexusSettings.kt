@@ -36,7 +36,11 @@ enum class LibrarySort(val label: String) {
     TITLE_ASC("Title (A-Z)"),
     TITLE_DESC("Title (Z-A)"),
     DURATION_DESC("Duration (Longest first)"),
-    SIZE_DESC("File size (Largest first)")
+    DURATION_ASC("Duration (Shortest first)"),
+    SIZE_DESC("File size (Largest first)"),
+    SIZE_ASC("File size (Smallest first)"),
+    DATE_MODIFIED_DESC("Date modified (Newest first)"),
+    DATE_MODIFIED_ASC("Date modified (Oldest first)")
 }
 
 /**
@@ -91,6 +95,13 @@ data class PlayerSettings(
 data class SubtitleSettings(
     val areSubtitlesEnabled: Boolean = true,
     val preferredSubtitleLanguage: String = "Auto",
+    val textSize: SubtitleTextSize = SubtitleTextSize.Normal,
+    val textColor: SubtitleTextColor = SubtitleTextColor.White,
+    val backgroundStyle: SubtitleBackgroundStyle = SubtitleBackgroundStyle.Box,
+    val backgroundOpacity: Float = 0.75f,
+    val position: SubtitlePosition = SubtitlePosition.Bottom,
+    val subtitleDelayMs: Long = 0L,
+    val defaultTrackBehavior: DefaultSubtitleTrackBehavior = DefaultSubtitleTrackBehavior.AUTO,
     val fontSizeScale: Float = 1.0f
 )
 
@@ -100,7 +111,10 @@ data class SubtitleSettings(
 data class LibrarySettings(
     val defaultLayoutMode: LibraryLayout = LibraryLayout.GRID,
     val defaultSortOption: LibrarySort = LibrarySort.DATE_ADDED_DESC,
-    val scanBehavior: ScanBehavior = ScanBehavior.AUTOMATIC
+    val scanBehavior: ScanBehavior = ScanBehavior.AUTOMATIC,
+    val scanOnAppLaunch: Boolean = true,
+    val includeHiddenFiles: Boolean = false,
+    val excludedFolders: Set<String> = emptySet()
 )
 
 /**
@@ -132,8 +146,13 @@ data class AppearanceSettings(
  */
 data class AudioSettings(
     val preferredAudioLanguage: String = "Auto",
+    val audioBoostPercent: Int = 100,
     val isAudioBoostEnabled: Boolean = false,
-    val audioDelayMs: Long = 0L
+    val isEqualizerEnabled: Boolean = false,
+    val equalizerPreset: String = "Flat",
+    val customBandLevels: Map<Int, Int> = (0 until 5).associateWith { 0 },
+    val audioDelayMs: Long = 0L,
+    val rememberPerVideoAudioSettings: Boolean = false
 )
 
 /**

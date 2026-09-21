@@ -1,5 +1,6 @@
 package com.nexus.player.core.scanner
 
+import com.nexus.player.core.scanner.model.ScanOptions
 import com.nexus.player.core.scanner.model.ScanResult
 import com.nexus.player.core.scanner.model.ScanState
 import kotlinx.coroutines.flow.StateFlow
@@ -17,10 +18,10 @@ interface MediaScanner {
     val scanState: StateFlow<ScanState>
 
     /**
-     * Executes a full library scan asynchronously.
+     * Executes a library scan asynchronously with the specified [options].
      * Returns the [ScanResult] summary on completion.
      */
-    suspend fun startScan(): ScanResult
+    suspend fun startScan(options: ScanOptions = ScanOptions()): ScanResult
 
     /**
      * Cancels an ongoing scan cooperatively.

@@ -168,6 +168,32 @@ interface VideoRepository {
     suspend fun deleteStaleVideos(validIds: List<String>)
 
     /**
+     * Clean up stale records no longer found in [validIds] strictly within [scannedFolderPaths].
+     * Media records outside [scannedFolderPaths] (e.g. excluded or inaccessible locations) are preserved.
+     */
+    suspend fun deleteStaleVideosInFolders(validIds: List<String>, scannedFolderPaths: List<String>) {}
+
+    /**
+     * Deletes all video records belonging to [folderPath].
+     */
+    suspend fun deleteVideosInFolder(folderPath: String) {}
+
+    /**
+     * Retrieves lightweight lookup items for all existing videos to enable O(1) scanner change detection.
+     */
+    suspend fun getAllScanLookup(): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> = emptyMap()
+
+    /**
+     * Retrieves lightweight lookup items for a targeted folder to enable O(1) scanner change detection.
+     */
+    suspend fun getScanLookupForFolder(folderPath: String): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> = emptyMap()
+
+    /**
+     * Retrieves a single folder summary by path without loading all other folders in the database.
+     */
+    fun getFolderSummaryByPath(folderPath: String): Flow<VideoFolder?> = kotlinx.coroutines.flow.flowOf(null)
+
+    /**
      * Clear all video records.
      */
     suspend fun clearAll()

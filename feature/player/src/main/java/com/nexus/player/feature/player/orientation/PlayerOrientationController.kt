@@ -44,8 +44,10 @@ class PlayerOrientationController(
         private set
 
     init {
-        // Enable sensor rotation by default in player when unlocked
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        // Enable sensor rotation by default in player when unlocked, unless rotating
+        if (activity?.isChangingConfigurations != true) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
     }
 
     /**
@@ -82,11 +84,13 @@ class PlayerOrientationController(
      */
     fun enterFullscreen(isLandscapeVideo: Boolean) {
         isFullscreen = true
-        activity?.let { act ->
-            act.requestedOrientation = if (isLandscapeVideo) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        if (!isOrientationLocked) {
+            activity?.let { act ->
+                act.requestedOrientation = if (isLandscapeVideo) {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
             }
         }
         hideSystemBars()
@@ -144,10 +148,12 @@ fun rememberPlayerOrientationController(
         PlayerOrientationController(activity, window)
     }
 
-    // Always reset to application default on dispose
+    // Always reset to application default on dispose, but skip if only changing configurations (rotation)
     DisposableEffect(controller) {
         onDispose {
-            controller.resetToAppDefault()
+            if (activity?.isChangingConfigurations != true) {
+                controller.resetToAppDefault()
+            }
         }
     }
 

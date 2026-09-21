@@ -23,7 +23,7 @@ class AudioEffectsControllerTest {
     @Test
     fun equalizerPresets_allPresetsDefinedWithFiveBands() {
         val presets = EqualizerPreset.PRESETS
-        assertEquals(9, presets.size)
+        assertEquals(10, presets.size)
         for (preset in presets) {
             assertEquals("Preset ${preset.name} must have 5 bands", 5, preset.bandGains.size)
         }
@@ -92,5 +92,29 @@ class AudioEffectsControllerTest {
         controller.setBandLevel(2, 300)
         controller.detachAudioSession()
         controller.release()
+    }
+
+    @Test
+    fun equalizerBandLevels_setBandLevelsUpdatesMapAndSetsCustomPreset() {
+        val customMap = mapOf(0 to 300, 1 to -100, 2 to 200, 3 to -300, 4 to 500)
+        controller.setBandLevels(customMap)
+
+        assertEquals("Custom", controller.currentPreset.value)
+        assertEquals(300, controller.bandLevels.value[0])
+        assertEquals(-100, controller.bandLevels.value[1])
+        assertEquals(200, controller.bandLevels.value[2])
+        assertEquals(-300, controller.bandLevels.value[3])
+        assertEquals(500, controller.bandLevels.value[4])
+    }
+
+    @Test
+    fun customPreset_doesNotResetCustomBandsToFlat() {
+        controller.setBandLevels(mapOf(0 to 450, 1 to -250))
+        assertEquals(450, controller.bandLevels.value[0])
+
+        // Calling setEqualizerPreset("Custom") must retain the custom values
+        controller.setEqualizerPreset("Custom")
+        assertEquals(450, controller.bandLevels.value[0])
+        assertEquals(-250, controller.bandLevels.value[1])
     }
 }

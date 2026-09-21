@@ -9,6 +9,11 @@ import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
 import com.nexus.player.core.common.settings.model.ResumeBehavior
 import com.nexus.player.core.common.settings.model.ScanBehavior
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
+import com.nexus.player.core.common.settings.model.SubtitleBackgroundStyle
+import com.nexus.player.core.common.settings.model.SubtitlePosition
+import com.nexus.player.core.common.settings.model.SubtitleTextColor
+import com.nexus.player.core.common.settings.model.SubtitleTextSize
 import com.nexus.player.core.common.settings.model.ThemeMode
 import com.nexus.player.core.common.settings.model.VideoDisplayMode
 import kotlinx.coroutines.CoroutineScope
@@ -148,5 +153,62 @@ class SettingsRepositoryTest {
         assertEquals("Japanese", updated.audio.preferredAudioLanguage)
         assertTrue(updated.audio.isAudioBoostEnabled)
         assertEquals(100L, updated.audio.audioDelayMs)
+    }
+
+    @Test
+    fun updateSubtitleStylingAndBehavior_persistsAndEmits() = runTest(testDispatcher) {
+        repository.setSubtitleTextSize(SubtitleTextSize.ExtraLarge)
+        repository.setSubtitleTextColor(SubtitleTextColor.Yellow)
+        repository.setSubtitleBackgroundStyle(SubtitleBackgroundStyle.DropShadow)
+        repository.setSubtitleBackgroundOpacity(0.5f)
+        repository.setSubtitlePosition(SubtitlePosition.Raised)
+        repository.setSubtitleDelayMs(250L)
+        repository.setDefaultSubtitleTrackBehavior(DefaultSubtitleTrackBehavior.FORCED_ONLY)
+
+        val updated = repository.settings.first()
+        assertEquals(SubtitleTextSize.ExtraLarge, updated.subtitles.textSize)
+        assertEquals(SubtitleTextColor.Yellow, updated.subtitles.textColor)
+        assertEquals(SubtitleBackgroundStyle.DropShadow, updated.subtitles.backgroundStyle)
+        assertEquals(0.5f, updated.subtitles.backgroundOpacity, 0.001f)
+        assertEquals(SubtitlePosition.Raised, updated.subtitles.position)
+        assertEquals(250L, updated.subtitles.subtitleDelayMs)
+        assertEquals(DefaultSubtitleTrackBehavior.FORCED_ONLY, updated.subtitles.defaultTrackBehavior)
+    }
+
+    @Test
+    fun updateAudioAndEqualizerSettings_persistsAndEmits() = runTest(testDispatcher) {
+        repository.setAudioBoostPercent(175)
+        repository.setEqualizerEnabled(true)
+        repository.setEqualizerPreset("Rock")
+        repository.setCustomBandLevel(0, 350)
+        repository.setRememberPerVideoAudioSettings(true)
+
+        val updated = repository.settings.first()
+        assertEquals(175, updated.audio.audioBoostPercent)
+        assertTrue(updated.audio.isAudioBoostEnabled)
+        assertTrue(updated.audio.isEqualizerEnabled)
+        assertEquals("Custom", updated.audio.equalizerPreset)
+        assertEquals(350, updated.audio.customBandLevels[0])
+        assertTrue(updated.audio.rememberPerVideoAudioSettings)
+    }
+
+    @Test
+    fun updateLibrarySettings_persistsAndEmitsNewValues() = runTest(testDispatcher) {
+        repository.setDefaultLayoutMode(LibraryLayout.LIST)
+        repository.setDefaultSortOption(LibrarySort.DATE_MODIFIED_DESC)
+        repository.setScanOnAppLaunch(false)
+        repository.setIncludeHiddenFiles(true)
+        repository.addExcludedFolder("/storage/emulated/0/DCIM/.thumbnails")
+
+        val updated = repository.settings.first()
+        assertEquals(LibraryLayout.LIST, updated.library.defaultLayoutMode)
+        assertEquals(LibrarySort.DATE_MODIFIED_DESC, updated.library.defaultSortOption)
+        assertFalse(updated.library.scanOnAppLaunch)
+        assertTrue(updated.library.includeHiddenFiles)
+        assertTrue(updated.library.excludedFolders.contains("/storage/emulated/0/DCIM/.thumbnails"))
+
+        repository.removeExcludedFolder("/storage/emulated/0/DCIM/.thumbnails")
+        val afterRemoval = repository.settings.first()
+        assertFalse(afterRemoval.library.excludedFolders.contains("/storage/emulated/0/DCIM/.thumbnails"))
     }
 }

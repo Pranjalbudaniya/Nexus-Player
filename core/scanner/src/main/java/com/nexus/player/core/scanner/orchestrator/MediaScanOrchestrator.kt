@@ -36,6 +36,20 @@ interface MediaScanOrchestrator {
     fun triggerManualScan(): Boolean
 
     /**
+     * Triggers an incremental refresh of media folders.
+     *
+     * @return true if a new scan was started; false if a scan is already in progress.
+     */
+    fun triggerIncrementalScan(): Boolean
+
+    /**
+     * Triggers a scan targeting strictly a specific folder URI or folder path.
+     *
+     * @return true if a new scan was started; false if a scan is already in progress.
+     */
+    fun triggerLocationScan(folderUriOrPath: String): Boolean
+
+    /**
      * Cancels an active scan cooperatively.
      */
     fun cancelScan()

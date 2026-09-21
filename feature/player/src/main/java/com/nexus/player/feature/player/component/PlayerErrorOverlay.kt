@@ -50,7 +50,7 @@ fun PlayerErrorOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .testTag("player_error_overlay")
     ) {
         // Top back navigation
@@ -68,7 +68,7 @@ fun PlayerErrorOverlay(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Navigate back",
-                    tint = androidx.compose.ui.graphics.Color.White
+                    tint = MaterialTheme.colorScheme.onBackground
                 )
             }
         }

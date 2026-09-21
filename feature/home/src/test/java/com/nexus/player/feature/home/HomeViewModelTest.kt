@@ -470,6 +470,8 @@ class HomeViewModelTest {
 
         override fun triggerStartupScan(): Boolean = true
         override fun triggerManualScan(): Boolean = true
+        override fun triggerIncrementalScan(): Boolean = true
+        override fun triggerLocationScan(folderUriOrPath: String): Boolean = true
         override fun cancelScan() {}
     }
 

@@ -186,3 +186,12 @@ private fun computeResolution(width: Int, height: Int): String {
         else -> "SD"
     }
 }
+
+/**
+ * Returns true if this media item represents a remote network stream rather than a local file.
+ */
+val MediaMetadata.isNetworkMedia: Boolean
+    get() = id.startsWith("http://", ignoreCase = true) ||
+        id.startsWith("https://", ignoreCase = true) ||
+        mediaUri.startsWith("http://", ignoreCase = true) ||
+        mediaUri.startsWith("https://", ignoreCase = true)

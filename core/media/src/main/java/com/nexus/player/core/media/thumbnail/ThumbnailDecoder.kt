@@ -89,12 +89,23 @@ class DefaultThumbnailDecoder @Inject constructor(
                 if (scaled != null) return scaled
             }
 
+            if (cancellationSignal?.isCanceled == true) return null
+
             // Standard fallback
             val frame = retriever.getFrameAtTime(targetTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
+            if (cancellationSignal?.isCanceled == true) {
+                frame?.recycle()
+                return null
+            }
+
             if (frame != null && (frame.width > targetWidth || frame.height > targetHeight)) {
-                return Bitmap.createScaledBitmap(frame, targetWidth, targetHeight, true)
+                val scaled = Bitmap.createScaledBitmap(frame, targetWidth, targetHeight, true)
+                if (scaled != frame) {
+                    frame.recycle()
+                }
+                return scaled
             }
             return frame
         } catch (e: Exception) {

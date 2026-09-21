@@ -5,6 +5,7 @@ import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.database.model.VideoSortOrder
 import com.nexus.player.core.database.repository.VideoRepository
 import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.media.model.toMediaMetadata
 import com.nexus.player.core.media.operations.VideoFileOperationsManager
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.playback.queue.PlaybackQueueManager
@@ -218,20 +219,163 @@ class MoreViewModelTest {
         assertTrue(fakeRepository.favoriteUpdates["fav_1"] == true)
     }
 
+    @Test
+    fun favoriteVideos_emitsFromRepository() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.favoriteVideos.collect {}
+        }
+
+        val v1 = sampleVideo("fav_1", "Favorite 1", isFavorite = true)
+        val v2 = sampleVideo("fav_2", "Favorite 2", isFavorite = true)
+        fakeRepository.favoriteVideosFlow.value = listOf(v1, v2)
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.favoriteVideos.value.size)
+        assertEquals("fav_1", viewModel.favoriteVideos.value[0].id)
+    }
+
+    @Test
+    fun playFavoriteVideo_configuresQueueWithFavoritesSource() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.favoriteVideos.collect {}
+        }
+
+        val v1 = sampleVideo("fav_1", "Favorite 1", isFavorite = true)
+        val v2 = sampleVideo("fav_2", "Favorite 2", isFavorite = true)
+        fakeRepository.favoriteVideosFlow.value = listOf(v1, v2)
+        advanceUntilIdle()
+
+        viewModel.playFavoriteVideo("fav_2")
+        advanceUntilIdle()
+
+        val queueState = fakePlaybackQueueManager.queueState.value
+        assertEquals("fav_2", queueState.currentVideoId)
+        assertEquals(2, queueState.size)
+        assertEquals(QueueSource.Favorites, queueState.source)
+    }
+
+    @Test
+    fun recentVideoForInfo_emitsHistoryOrAllVideos() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.recentVideoForInfo.collect {}
+        }
+
+        // Case 1: Empty initially
+        advanceUntilIdle()
+        assertEquals(null, viewModel.recentVideoForInfo.value)
+
+        // Case 2: Only allVideos available
+        val vLibrary = sampleVideo("lib_1", "Library Video")
+        fakeRepository.allVideosFlow.value = listOf(vLibrary)
+        advanceUntilIdle()
+        assertEquals("lib_1", viewModel.recentVideoForInfo.value?.id)
+
+        // Case 3: History video takes priority
+        val vHistory = sampleVideo("hist_1", "History Video")
+        fakeRepository.historyVideosFlow.value = listOf(vHistory)
+        advanceUntilIdle()
+        assertEquals("hist_1", viewModel.recentVideoForInfo.value?.id)
+    }
+
+    @Test
+    fun clearHistoryItem_undoRestoresProgress() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        val video = sampleVideo("v1", "Test Video").copy(
+            lastPlayedAt = 1000L,
+            playbackPositionMs = 5000L,
+            playbackPercentage = 0.5f
+        )
+        fakeRepository.videosMap["v1"] = video
+        fakeRepository.historyVideosFlow.value = listOf(video)
+        advanceUntilIdle()
+
+        var clearedTitle: String? = null
+        viewModel.clearHistoryItem("v1") { item ->
+            clearedTitle = item.title
+        }
+        advanceUntilIdle()
+
+        assertEquals("Test Video", clearedTitle)
+        assertTrue(fakeRepository.clearedVideoIds.contains("v1"))
+
+        var restoredTitle: String? = null
+        viewModel.undoClearHistoryItem { item ->
+            restoredTitle = item.title
+        }
+        advanceUntilIdle()
+
+        assertEquals("Test Video", restoredTitle)
+        assertTrue(fakeRepository.restoredProgressUpdates.containsKey("v1"))
+    }
+
+    @Test
+    fun onDeleteConfirm_withCallback_reportsSuccess() = testScope.runTest {
+        val video = sampleVideo("v_del", "Delete Video")
+        var deleteResult: Result<Unit>? = null
+
+        viewModel.onDeleteConfirm(video.toMediaMetadata()) { result ->
+            deleteResult = result
+        }
+        advanceUntilIdle()
+
+        assertTrue(deleteResult?.isSuccess == true)
+        assertFalse(fakePlaybackQueueManager.queueState.value.items.contains("v_del"))
+    }
+
+    @Test
+    fun onToggleFavorite_withCallback_reportsNewState() = testScope.runTest {
+        val video = sampleVideo("v_fav", "Favorite Video").copy(isFavorite = false)
+        var reportedFavoriteState: Boolean? = null
+
+        viewModel.onToggleFavorite(video.toMediaMetadata()) { newState ->
+            reportedFavoriteState = newState
+        }
+        advanceUntilIdle()
+
+        assertEquals(true, reportedFavoriteState)
+        assertEquals(true, fakeRepository.favoriteUpdates["v_fav"])
+    }
+
+    @Test
+    fun restoreDeletedVideo_callsFileOperationsManager() = testScope.runTest {
+        var restoredTitle: String? = null
+        viewModel.restoreDeletedVideo("v_del") { result ->
+            restoredTitle = result.getOrNull()?.title
+        }
+        advanceUntilIdle()
+
+        assertEquals("Restored", restoredTitle)
+    }
+
     // --- Test Doubles ---
 
     private class FakeMoreVideoRepository : VideoRepository {
         val historyVideosFlow = MutableStateFlow<List<Video>>(emptyList())
         val favoriteVideosFlow = MutableStateFlow<List<Video>>(emptyList())
+        val allVideosFlow = MutableStateFlow<List<Video>>(emptyList())
         val clearedVideoIds = mutableListOf<String>()
+        val restoredProgressUpdates = mutableMapOf<String, Long>()
         var hasClearedAll = false
         val favoriteUpdates = mutableMapOf<String, Boolean>()
         val videosMap = mutableMapOf<String, Video>()
+
+        override suspend fun updatePlaybackProgress(
+            id: String,
+            positionMs: Long,
+            percentage: Float,
+            lastPlayedAt: Long,
+            isCompleted: Boolean
+        ) {
+            restoredProgressUpdates[id] = positionMs
+        }
 
         override fun getAllHistoryVideos(): Flow<List<Video>> = historyVideosFlow.asStateFlow()
         override fun getHistoryVideos(limit: Int): Flow<List<Video>> = historyVideosFlow.asStateFlow()
         override fun getFavoriteVideos(): Flow<List<Video>> = favoriteVideosFlow.asStateFlow()
         override fun getFavoriteVideos(limit: Int): Flow<List<Video>> = favoriteVideosFlow.asStateFlow()
+        override fun getAllVideos(sortOrder: VideoSortOrder): Flow<List<Video>> = allVideosFlow.asStateFlow()
 
         override suspend fun clearHistoryForVideo(id: String) {
             clearedVideoIds.add(id)
@@ -248,8 +392,6 @@ class MoreViewModelTest {
         }
 
         override suspend fun getVideoById(id: String): Video? = videosMap[id]
-
-        override fun getAllVideos(sortOrder: VideoSortOrder): Flow<List<Video>> = flowOf(emptyList())
         override fun getRecentlyAddedVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
         override fun getContinueWatchingVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
         override fun getVideosByFolder(folderPath: String): Flow<List<Video>> = flowOf(emptyList())

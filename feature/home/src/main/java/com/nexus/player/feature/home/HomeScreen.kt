@@ -16,8 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,9 +32,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.nexus.player.feature.home.component.HomeSection
+import com.nexus.player.feature.home.component.HomeThumbnail
 import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -41,6 +47,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.ui.component.HorizontalSpacer
+import com.nexus.player.core.ui.component.NexusEmptyState
+import com.nexus.player.core.ui.component.NexusErrorState
 import com.nexus.player.core.ui.component.NexusFolderCard
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.NexusRecentVideoCard
@@ -48,8 +56,7 @@ import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.NexusVideoCard
 import com.nexus.player.core.ui.component.VerticalSpacer
-import com.nexus.player.feature.home.component.HomeSection
-import com.nexus.player.feature.home.component.HomeThumbnail
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 
 import android.content.Context
 import androidx.compose.material3.SnackbarDuration
@@ -96,13 +103,15 @@ fun HomeRoute(
         onFolderClick = onFolderClick,
         onToggleFavorite = viewModel::toggleFavorite,
         onShare = { video -> viewModel.shareVideo(context, video) },
+        onTriggerRescan = viewModel::triggerRescan,
         onRenameConfirm = { video, newName ->
             viewModel.renameVideo(video, newName) { result ->
                 scope.launch {
                     result.onSuccess { renamed ->
                         snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Rename", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -114,7 +123,8 @@ fun HomeRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Moved to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Move", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -126,7 +136,8 @@ fun HomeRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Copied to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Copy", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -144,7 +155,8 @@ fun HomeRoute(
                             viewModel.restoreDeletedVideo(video.id) { restoreResult ->
                                 if (restoreResult.isFailure) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                        val restoreMsg = UserFeedbackFormatter.formatFileError("Restore", restoreResult.exceptionOrNull())
+                                        snackbarHostState.showSnackbar(restoreMsg.ifBlank { "Failed to restore video" })
                                     }
                                 }
                             }
@@ -152,7 +164,8 @@ fun HomeRoute(
                             viewModel.purgeStagedDeletions()
                         }
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Delete", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -177,6 +190,7 @@ fun HomeScreen(
     onFolderClick: (folderPath: String, folderName: String) -> Unit = { _, _ -> },
     onToggleFavorite: (MediaMetadata) -> Unit = {},
     onShare: (MediaMetadata) -> Unit = {},
+    onTriggerRescan: () -> Unit = {},
     onRenameConfirm: (video: MediaMetadata, newName: String) -> Unit = { _, _ -> },
     onMoveConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
     onCopyConfirm: (video: MediaMetadata, targetFolderPath: String) -> Unit = { _, _ -> },
@@ -264,85 +278,42 @@ fun HomeScreen(
 
             when (uiState) {
                 is HomeUiState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        NexusLoadingIndicator()
-                    }
+                    NexusLoadingIndicator()
                 }
 
                 is HomeUiState.Empty -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.medium),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            if (uiState.isScanning) {
-                                CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(32.dp),
-                                    strokeWidth = 3.dp
-                                )
-                                VerticalSpacer(spacing.smallMedium)
-                                Text(
-                                    text = "Scanning your device for videos...",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                VerticalSpacer(spacing.extraSmall)
-                                Text(
-                                    text = "Discovered videos will appear here shortly",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else if (uiState.noAccessibleMedia) {
-                                Text(
-                                    text = "No accessible media found",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                VerticalSpacer(spacing.extraSmall)
-                                Text(
-                                    text = "Storage access is required to display your video library",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                Text(
-                                    text = "No media found on device",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                VerticalSpacer(spacing.extraSmall)
-                                Text(
-                                    text = "Add video files to your device storage to view them here",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    if (uiState.isScanning) {
+                        NexusLoadingIndicator(
+                            label = "Scanning your device for videos...",
+                            description = "Discovered videos will appear here shortly"
+                        )
+                    } else if (uiState.noAccessibleMedia) {
+                        NexusEmptyState(
+                            icon = Icons.Default.FolderOpen,
+                            title = "No accessible media found",
+                            description = "Storage access is required to display your video library",
+                            actionText = "Open Settings",
+                            actionIcon = Icons.Default.Settings,
+                            onActionClick = onNavigateToSettings
+                        )
+                    } else {
+                        NexusEmptyState(
+                            icon = Icons.Default.VideoLibrary,
+                            title = "No Media Found",
+                            description = "Add video files to your device storage or rescan to populate your library.",
+                            actionText = "Rescan Media",
+                            actionIcon = Icons.Default.Refresh,
+                            onActionClick = onTriggerRescan
+                        )
                     }
                 }
 
                 is HomeUiState.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.medium),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = uiState.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+                    NexusErrorState(
+                        message = UserFeedbackFormatter.formatScanError(null, uiState.message),
+                        actionText = "Retry Scan",
+                        onActionClick = onTriggerRescan
+                    )
                 }
 
                 is HomeUiState.Success -> {

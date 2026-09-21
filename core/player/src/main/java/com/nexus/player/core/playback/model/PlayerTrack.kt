@@ -22,7 +22,8 @@ data class PlayerTrack(
     val mimeType: String? = null,
     val channelCount: Int = 0,
     val codec: String? = null,
-    val isExternal: Boolean = false
+    val isExternal: Boolean = false,
+    val isForced: Boolean = false
 ) {
     /**
      * Resolves human-readable language name using device locale.

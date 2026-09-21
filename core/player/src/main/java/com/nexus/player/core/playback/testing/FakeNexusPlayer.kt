@@ -379,13 +379,24 @@ class FakeAudioEffectsController : com.nexus.player.core.playback.audio.AudioEff
 
     override fun setEqualizerPreset(presetName: String) {
         presetFlow.value = presetName
-        val preset = com.nexus.player.core.playback.audio.EqualizerPreset.fromName(presetName)
-        levelsFlow.value = preset.bandGains.mapIndexed { idx, gain -> idx to gain }.toMap()
+        if (!presetName.equals("Custom", ignoreCase = true)) {
+            val preset = com.nexus.player.core.playback.audio.EqualizerPreset.fromName(presetName)
+            levelsFlow.value = preset.bandGains.mapIndexed { idx, gain -> idx to gain }.toMap()
+        }
     }
 
     override fun setBandLevel(bandIndex: Int, levelmB: Int) {
         val current = levelsFlow.value.toMutableMap()
         current[bandIndex] = levelmB.coerceIn(bandLevelRange)
+        levelsFlow.value = current
+        presetFlow.value = "Custom"
+    }
+
+    override fun setBandLevels(levels: Map<Int, Int>) {
+        val current = levelsFlow.value.toMutableMap()
+        levels.forEach { (idx, gain) ->
+            current[idx] = gain.coerceIn(bandLevelRange)
+        }
         levelsFlow.value = current
         presetFlow.value = "Custom"
     }

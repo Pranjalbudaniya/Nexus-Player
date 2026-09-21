@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.media.model.MediaMetadata
+import com.nexus.player.core.media.model.isNetworkMedia
 import com.nexus.player.core.ui.component.HorizontalSpacer
 import com.nexus.player.core.ui.component.VerticalSpacer
 
@@ -61,6 +62,7 @@ fun VideoContextMenuSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val spacing = NexusTheme.spacing
+    val isNetwork = video.isNetworkMedia
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -85,8 +87,18 @@ fun VideoContextMenuSheet(
 
             VerticalSpacer(spacing.extraSmall)
 
+            val subtitleText = if (isNetwork) {
+                if (video.formattedDuration.isNotBlank() && video.formattedDuration != "00:00") {
+                    "${video.formattedDuration} • Network Stream"
+                } else {
+                    "Network Stream"
+                }
+            } else {
+                "${video.formattedDuration} • ${video.resolutionLabel} • ${video.formattedSize} • ${video.folderName}"
+            }
+
             Text(
-                text = "${video.formattedDuration} • ${video.resolutionLabel} • ${video.formattedSize} • ${video.folderName}",
+                text = subtitleText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -139,67 +151,70 @@ fun VideoContextMenuSheet(
                 }
             )
 
-            // 5. File Information
+            // 5. File Information / Stream Information
             ContextMenuActionRow(
                 icon = Icons.Default.Info,
-                label = "File Information",
+                label = if (isNetwork) "Stream Information" else "File Information",
                 onClick = {
                     onDismissRequest()
                     onShowFileInfo()
                 }
             )
 
-            // 6. Open Containing Folder
-            ContextMenuActionRow(
-                icon = Icons.Default.FolderOpen,
-                label = "Open Containing Folder",
-                onClick = {
-                    onDismissRequest()
-                    onOpenContainingFolder()
-                }
-            )
+            // Local-only file management actions (strictly excluded for network streams)
+            if (!isNetwork) {
+                // 6. Open Containing Folder
+                ContextMenuActionRow(
+                    icon = Icons.Default.FolderOpen,
+                    label = "Open Containing Folder",
+                    onClick = {
+                        onDismissRequest()
+                        onOpenContainingFolder()
+                    }
+                )
 
-            // 7. Rename
-            ContextMenuActionRow(
-                icon = Icons.Default.Edit,
-                label = "Rename",
-                onClick = {
-                    onDismissRequest()
-                    onRename()
-                }
-            )
+                // 7. Rename
+                ContextMenuActionRow(
+                    icon = Icons.Default.Edit,
+                    label = "Rename",
+                    onClick = {
+                        onDismissRequest()
+                        onRename()
+                    }
+                )
 
-            // 8. Move
-            ContextMenuActionRow(
-                icon = Icons.Default.DriveFileMove,
-                label = "Move",
-                onClick = {
-                    onDismissRequest()
-                    onMove()
-                }
-            )
+                // 8. Move
+                ContextMenuActionRow(
+                    icon = Icons.Default.DriveFileMove,
+                    label = "Move",
+                    onClick = {
+                        onDismissRequest()
+                        onMove()
+                    }
+                )
 
-            // 9. Copy
-            ContextMenuActionRow(
-                icon = Icons.Default.ContentCopy,
-                label = "Copy",
-                onClick = {
-                    onDismissRequest()
-                    onCopy()
-                }
-            )
+                // 9. Copy
+                ContextMenuActionRow(
+                    icon = Icons.Default.ContentCopy,
+                    label = "Copy",
+                    onClick = {
+                        onDismissRequest()
+                        onCopy()
+                    }
+                )
 
-            // 10. Delete
-            ContextMenuActionRow(
-                icon = Icons.Outlined.DeleteOutline,
-                label = "Delete",
-                tint = MaterialTheme.colorScheme.error,
-                labelColor = MaterialTheme.colorScheme.error,
-                onClick = {
-                    onDismissRequest()
-                    onDelete()
-                }
-            )
+                // 10. Delete
+                ContextMenuActionRow(
+                    icon = Icons.Outlined.DeleteOutline,
+                    label = "Delete",
+                    tint = MaterialTheme.colorScheme.error,
+                    labelColor = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        onDismissRequest()
+                        onDelete()
+                    }
+                )
+            }
 
             VerticalSpacer(spacing.medium)
         }

@@ -322,6 +322,54 @@ class VideoDaoTest {
     }
 
     @Test
+    fun deleteStaleVideosInFolders_onlyDeletesWithinSpecifiedFolders() = runTest {
+        val inFolderA_valid = createSampleVideo(id = "a_1", mediaUri = "uri_a1", folderPath = "/storage/A")
+        val inFolderA_stale = createSampleVideo(id = "a_2", mediaUri = "uri_a2", folderPath = "/storage/A")
+        val inFolderB_preserved = createSampleVideo(id = "b_1", mediaUri = "uri_b1", folderPath = "/storage/B")
+
+        videoDao.upsertVideos(listOf(inFolderA_valid, inFolderA_stale, inFolderB_preserved))
+        assertEquals(3, videoDao.getVideosCount())
+
+        // Scanned only folder A, discovered a_1. Folder B was not scanned.
+        videoDao.deleteStaleVideosInFolders(
+            validIds = listOf("a_1"),
+            scannedFolderPaths = listOf("/storage/A")
+        )
+
+        assertEquals(2, videoDao.getVideosCount())
+        assertNotNull(videoDao.getVideoById("a_1"))
+        assertNull(videoDao.getVideoById("a_2"))
+        assertNotNull(videoDao.getVideoById("b_1")) // Preserved!
+    }
+
+    @Test
+    fun deleteVideosInFolder_deletesAllInSpecificFolder() = runTest {
+        val v1 = createSampleVideo(id = "1", mediaUri = "u1", folderPath = "/storage/A")
+        val v2 = createSampleVideo(id = "2", mediaUri = "u2", folderPath = "/storage/B")
+        videoDao.upsertVideos(listOf(v1, v2))
+
+        videoDao.deleteVideosInFolder("/storage/A")
+        assertEquals(1, videoDao.getVideosCount())
+        assertNull(videoDao.getVideoById("1"))
+        assertNotNull(videoDao.getVideoById("2"))
+    }
+
+    @Test
+    fun getAllVideosByDateModified_sortsCorrectly() = runTest {
+        val oldVideo = createSampleVideo(id = "old", mediaUri = "u_old").copy(lastModified = 1000L)
+        val newVideo = createSampleVideo(id = "new", mediaUri = "u_new").copy(lastModified = 5000L)
+        videoDao.upsertVideos(listOf(oldVideo, newVideo))
+
+        val desc = videoDao.getAllVideosByDateModifiedDesc().first()
+        assertEquals("new", desc[0].id)
+        assertEquals("old", desc[1].id)
+
+        val asc = videoDao.getAllVideosByDateModifiedAsc().first()
+        assertEquals("old", asc[0].id)
+        assertEquals("new", asc[1].id)
+    }
+
+    @Test
     fun searchVideos_byTitleAndFilename() = runTest {
         val video1 = createSampleVideo(id = "1", title = "Interstellar", fileName = "interstellar.mkv", mediaUri = "u1")
         val video2 = createSampleVideo(id = "2", title = "The Matrix", fileName = "matrix_reloaded.mp4", mediaUri = "u2")

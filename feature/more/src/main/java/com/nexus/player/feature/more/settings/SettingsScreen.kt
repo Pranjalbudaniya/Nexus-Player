@@ -42,21 +42,34 @@ import com.nexus.player.core.common.settings.model.LibraryLayout
 import com.nexus.player.core.common.settings.model.LibrarySort
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
 import com.nexus.player.core.common.settings.model.ResumeBehavior
-import com.nexus.player.core.common.settings.model.ScanBehavior
+import com.nexus.player.core.common.settings.model.SubtitleBackgroundStyle
+import com.nexus.player.core.common.settings.model.SubtitlePosition
+import com.nexus.player.core.common.settings.model.SubtitleTextColor
+import com.nexus.player.core.common.settings.model.SubtitleTextSize
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
 import com.nexus.player.core.common.settings.model.ThemeMode
 import com.nexus.player.core.common.settings.model.VideoDisplayMode
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.VerticalSpacer
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material3.HorizontalDivider
 import com.nexus.player.feature.more.analytics.component.ClearAnalyticsDialog
 import com.nexus.player.feature.more.settings.component.AccentColorPicker
+import com.nexus.player.feature.more.settings.component.AcknowledgementsDialog
+import com.nexus.player.feature.more.settings.component.AudioSettingsCard
+import com.nexus.player.feature.more.settings.component.ClearHistoryDialog
+import com.nexus.player.feature.more.settings.component.LicensesDialog
+import com.nexus.player.feature.more.settings.component.ProjectInfoDialog
 import com.nexus.player.feature.more.settings.component.SettingActionRow
 import com.nexus.player.feature.more.settings.component.SettingInfoRow
 import com.nexus.player.feature.more.settings.component.SettingSectionCard
 import com.nexus.player.feature.more.settings.component.SettingSelectRow
 import com.nexus.player.feature.more.settings.component.SettingSelectionDialog
 import com.nexus.player.feature.more.settings.component.SettingSwitchRow
+import com.nexus.player.feature.more.settings.component.StorageSettingsCard
+import com.nexus.player.feature.more.settings.component.SubtitleSettingsCard
 
 private enum class ActiveDialog {
     PLAYBACK_SPEED,
@@ -66,10 +79,9 @@ private enum class ActiveDialog {
     PRESS_HOLD_SPEED,
     DISPLAY_MODE,
     SUBTITLE_LANG,
-    SUBTITLE_SCALE,
+    SUBTITLE_TRACK_BEHAVIOR,
     LIBRARY_LAYOUT,
     LIBRARY_SORT,
-    SCAN_BEHAVIOR,
     THEME_MODE,
     AUDIO_LANG,
     AUDIO_DELAY
@@ -78,6 +90,7 @@ private enum class ActiveDialog {
 @Composable
 fun SettingsRoute(
     onNavigateBack: () -> Unit,
+    onNavigateToStorageLocations: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -86,6 +99,7 @@ fun SettingsRoute(
     SettingsScreen(
         uiState = uiState,
         onNavigateBack = onNavigateBack,
+        onNavigateToStorageLocations = onNavigateToStorageLocations,
         onToggleSection = viewModel::toggleSectionExpanded,
         onSetDefaultPlaybackSpeed = viewModel::setDefaultPlaybackSpeed,
         onSetAutoNextEnabled = viewModel::setAutoNextEnabled,
@@ -97,22 +111,43 @@ fun SettingsRoute(
         onSetDefaultDisplayMode = viewModel::setDefaultDisplayMode,
         onSetSubtitlesEnabled = viewModel::setSubtitlesEnabled,
         onSetPreferredSubtitleLanguage = viewModel::setPreferredSubtitleLanguage,
-        onSetSubtitleFontScale = viewModel::setSubtitleFontScale,
+        onSetSubtitleTextSize = viewModel::setSubtitleTextSize,
+        onSetSubtitleTextColor = viewModel::setSubtitleTextColor,
+        onSetSubtitleBackgroundStyle = viewModel::setSubtitleBackgroundStyle,
+        onSetSubtitleBackgroundOpacity = viewModel::setSubtitleBackgroundOpacity,
+        onSetSubtitlePosition = viewModel::setSubtitlePosition,
+        onSetSubtitleDelayMs = viewModel::setSubtitleDelayMs,
+        onSetDefaultSubtitleTrackBehavior = viewModel::setDefaultSubtitleTrackBehavior,
         onSetDefaultLayoutMode = viewModel::setDefaultLayoutMode,
         onSetDefaultSortOption = viewModel::setDefaultSortOption,
-        onSetScanBehavior = viewModel::setScanBehavior,
+        onSetScanOnAppLaunch = viewModel::setScanOnAppLaunch,
+        onSetIncludeHiddenFiles = viewModel::setIncludeHiddenFiles,
+        onTriggerIncrementalScan = viewModel::triggerIncrementalScan,
+        onTriggerFullScan = viewModel::triggerFullScan,
+        onCancelScan = viewModel::cancelScan,
         onSetThemeMode = viewModel::setThemeMode,
         onSetAmoledMode = viewModel::setAmoledMode,
         onSetDynamicColor = viewModel::setDynamicColor,
         onSetAccentColor = viewModel::setAccentColor,
         onSetPreferredAudioLanguage = viewModel::setPreferredAudioLanguage,
+        onSetAudioBoostPercent = viewModel::setAudioBoostPercent,
         onSetAudioBoostEnabled = viewModel::setAudioBoostEnabled,
+        onSetEqualizerEnabled = viewModel::setEqualizerEnabled,
+        onSetEqualizerPreset = viewModel::setEqualizerPreset,
+        onSetCustomBandLevel = viewModel::setCustomBandLevel,
+        onResetCustomBandLevels = viewModel::resetCustomBandLevels,
         onSetAudioDelayMs = viewModel::setAudioDelayMs,
+        onSetRememberPerVideoAudioSettings = viewModel::setRememberPerVideoAudioSettings,
         onSetHardwareAcceleration = viewModel::setHardwareAcceleration,
         onSetDebugLogging = viewModel::setDebugLogging,
+        onOpenClearHistoryDialog = { viewModel.setClearHistoryDialogOpen(true) },
+        onConfirmClearHistory = viewModel::clearPlaybackHistory,
+        onDismissClearHistory = { viewModel.setClearHistoryDialogOpen(false) },
         onOpenClearAnalyticsDialog = { viewModel.setClearAnalyticsDialogOpen(true) },
         onConfirmClearAnalytics = viewModel::clearAllAnalytics,
         onDismissClearAnalytics = { viewModel.setClearAnalyticsDialogOpen(false) },
+        onOpenAboutDialog = viewModel::setActiveAboutDialog,
+        onDismissAboutDialog = { viewModel.setActiveAboutDialog(null) },
         onClearUserMessage = viewModel::clearUserMessage,
         modifier = modifier
     )
@@ -123,6 +158,7 @@ fun SettingsRoute(
 fun SettingsScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
+    onNavigateToStorageLocations: () -> Unit = {},
     onToggleSection: (SettingSection) -> Unit,
     onSetDefaultPlaybackSpeed: (Float) -> Unit,
     onSetAutoNextEnabled: (Boolean) -> Unit,
@@ -134,22 +170,43 @@ fun SettingsScreen(
     onSetDefaultDisplayMode: (VideoDisplayMode) -> Unit,
     onSetSubtitlesEnabled: (Boolean) -> Unit,
     onSetPreferredSubtitleLanguage: (String) -> Unit,
-    onSetSubtitleFontScale: (Float) -> Unit,
+    onSetSubtitleTextSize: (SubtitleTextSize) -> Unit = {},
+    onSetSubtitleTextColor: (SubtitleTextColor) -> Unit = {},
+    onSetSubtitleBackgroundStyle: (SubtitleBackgroundStyle) -> Unit = {},
+    onSetSubtitleBackgroundOpacity: (Float) -> Unit = {},
+    onSetSubtitlePosition: (SubtitlePosition) -> Unit = {},
+    onSetSubtitleDelayMs: (Long) -> Unit = {},
+    onSetDefaultSubtitleTrackBehavior: (DefaultSubtitleTrackBehavior) -> Unit = {},
     onSetDefaultLayoutMode: (LibraryLayout) -> Unit,
     onSetDefaultSortOption: (LibrarySort) -> Unit,
-    onSetScanBehavior: (ScanBehavior) -> Unit,
+    onSetScanOnAppLaunch: (Boolean) -> Unit = {},
+    onSetIncludeHiddenFiles: (Boolean) -> Unit = {},
+    onTriggerIncrementalScan: () -> Unit = {},
+    onTriggerFullScan: () -> Unit = {},
+    onCancelScan: () -> Unit = {},
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetAmoledMode: (Boolean) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
     onSetAccentColor: (AccentColor) -> Unit,
     onSetPreferredAudioLanguage: (String) -> Unit,
+    onSetAudioBoostPercent: (Int) -> Unit = {},
     onSetAudioBoostEnabled: (Boolean) -> Unit,
+    onSetEqualizerEnabled: (Boolean) -> Unit = {},
+    onSetEqualizerPreset: (String) -> Unit = {},
+    onSetCustomBandLevel: (bandIndex: Int, levelmB: Int) -> Unit = { _, _ -> },
+    onResetCustomBandLevels: () -> Unit = {},
     onSetAudioDelayMs: (Long) -> Unit,
+    onSetRememberPerVideoAudioSettings: (Boolean) -> Unit = {},
     onSetHardwareAcceleration: (Boolean) -> Unit,
     onSetDebugLogging: (Boolean) -> Unit,
+    onOpenClearHistoryDialog: () -> Unit,
+    onConfirmClearHistory: () -> Unit,
+    onDismissClearHistory: () -> Unit,
     onOpenClearAnalyticsDialog: () -> Unit,
     onConfirmClearAnalytics: () -> Unit,
     onDismissClearAnalytics: () -> Unit,
+    onOpenAboutDialog: (AboutDialogType) -> Unit,
+    onDismissAboutDialog: () -> Unit,
     onClearUserMessage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -267,32 +324,20 @@ fun SettingsScreen(
 
             // 3. SUBTITLES
             item(key = "section_subtitles") {
-                SettingSectionCard(
-                    title = SettingSection.SUBTITLES.title,
-                    subtitle = SettingSection.SUBTITLES.subtitle,
-                    icon = Icons.Default.Subtitles,
+                SubtitleSettingsCard(
+                    settings = uiState.settings.subtitles,
                     isExpanded = uiState.expandedSections.contains(SettingSection.SUBTITLES),
-                    onToggleExpand = { onToggleSection(SettingSection.SUBTITLES) }
-                ) {
-                    SettingSwitchRow(
-                        title = "Enable Subtitles",
-                        checked = uiState.settings.subtitles.areSubtitlesEnabled,
-                        onCheckedChange = onSetSubtitlesEnabled,
-                        description = "Render subtitles automatically when tracks exist"
-                    )
-                    SettingSelectRow(
-                        title = "Preferred Language",
-                        currentValue = uiState.settings.subtitles.preferredSubtitleLanguage,
-                        onClick = { activeDialog = ActiveDialog.SUBTITLE_LANG },
-                        description = "Default language track selected for captions"
-                    )
-                    SettingSelectRow(
-                        title = "Font Size Scale",
-                        currentValue = "${uiState.settings.subtitles.fontSizeScale}x",
-                        onClick = { activeDialog = ActiveDialog.SUBTITLE_SCALE },
-                        description = "Relative size of on-screen subtitle captions"
-                    )
-                }
+                    onToggleExpand = { onToggleSection(SettingSection.SUBTITLES) },
+                    onSetSubtitlesEnabled = onSetSubtitlesEnabled,
+                    onOpenLanguageDialog = { activeDialog = ActiveDialog.SUBTITLE_LANG },
+                    onOpenTrackBehaviorDialog = { activeDialog = ActiveDialog.SUBTITLE_TRACK_BEHAVIOR },
+                    onSetSubtitleTextSize = onSetSubtitleTextSize,
+                    onSetSubtitleTextColor = onSetSubtitleTextColor,
+                    onSetSubtitleBackgroundStyle = onSetSubtitleBackgroundStyle,
+                    onSetSubtitleBackgroundOpacity = onSetSubtitleBackgroundOpacity,
+                    onSetSubtitlePosition = onSetSubtitlePosition,
+                    onSetSubtitleDelayMs = onSetSubtitleDelayMs
+                )
             }
 
             // 4. LIBRARY
@@ -315,12 +360,6 @@ fun SettingsScreen(
                         currentValue = uiState.settings.library.defaultSortOption.label,
                         onClick = { activeDialog = ActiveDialog.LIBRARY_SORT },
                         description = "Initial ordering criteria for video items"
-                    )
-                    SettingSelectRow(
-                        title = "Scan Behavior",
-                        currentValue = uiState.settings.library.scanBehavior.label,
-                        onClick = { activeDialog = ActiveDialog.SCAN_BEHAVIOR },
-                        description = "Media library indexing on app launch"
                     )
                 }
             }
@@ -366,54 +405,40 @@ fun SettingsScreen(
 
             // 6. AUDIO
             item(key = "section_audio") {
-                SettingSectionCard(
-                    title = SettingSection.AUDIO.title,
-                    subtitle = SettingSection.AUDIO.subtitle,
-                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                AudioSettingsCard(
+                    settings = uiState.settings.audio,
                     isExpanded = uiState.expandedSections.contains(SettingSection.AUDIO),
-                    onToggleExpand = { onToggleSection(SettingSection.AUDIO) }
-                ) {
-                    SettingSelectRow(
-                        title = "Preferred Audio Language",
-                        currentValue = uiState.settings.audio.preferredAudioLanguage,
-                        onClick = { activeDialog = ActiveDialog.AUDIO_LANG },
-                        description = "Preferred language when multiple audio streams exist"
-                    )
-                    SettingSwitchRow(
-                        title = "Audio Boost",
-                        checked = uiState.settings.audio.isAudioBoostEnabled,
-                        onCheckedChange = onSetAudioBoostEnabled,
-                        description = "Amplify dialog and quiet soundtracks"
-                    )
-                    SettingSelectRow(
-                        title = "Audio Delay (Sync)",
-                        currentValue = "${uiState.settings.audio.audioDelayMs} ms",
-                        onClick = { activeDialog = ActiveDialog.AUDIO_DELAY },
-                        description = "Offset audio relative to video for Bluetooth latency"
-                    )
-                }
+                    onToggleExpand = { onToggleSection(SettingSection.AUDIO) },
+                    onSetAudioBoostPercent = onSetAudioBoostPercent,
+                    onSetEqualizerEnabled = onSetEqualizerEnabled,
+                    onSetEqualizerPreset = onSetEqualizerPreset,
+                    onSetCustomBandLevel = onSetCustomBandLevel,
+                    onResetCustomBandLevels = onResetCustomBandLevels,
+                    onOpenLanguageDialog = { activeDialog = ActiveDialog.AUDIO_LANG },
+                    onSetAudioDelayMs = onSetAudioDelayMs,
+                    onSetRememberPerVideoAudioSettings = onSetRememberPerVideoAudioSettings
+                )
             }
 
             // 7. STORAGE
             item(key = "section_storage") {
-                SettingSectionCard(
-                    title = SettingSection.STORAGE.title,
-                    subtitle = SettingSection.STORAGE.subtitle,
-                    icon = Icons.Default.Storage,
+                StorageSettingsCard(
+                    storageSettings = uiState.settings.storage,
+                    librarySettings = uiState.settings.library,
+                    accessMode = uiState.storageAccessMode,
+                    indexedFolderCount = uiState.indexedFolderCount,
+                    indexedVideoCount = uiState.indexedVideoCount,
+                    scanState = uiState.scanState,
+                    isScanning = uiState.isScanning,
                     isExpanded = uiState.expandedSections.contains(SettingSection.STORAGE),
-                    onToggleExpand = { onToggleSection(SettingSection.STORAGE) }
-                ) {
-                    SettingInfoRow(
-                        title = "Thumbnail Cache Capacity",
-                        value = "${uiState.settings.storage.cacheThumbnailMaxEntries} entries",
-                        description = "In-memory LRU cache capacity for video thumbnails"
-                    )
-                    SettingInfoRow(
-                        title = "Preserve Staged Deletions",
-                        value = if (uiState.settings.storage.preserveStagedDeletions) "Enabled" else "Disabled",
-                        description = "Safeguard media files against accidental deletion"
-                    )
-                }
+                    onToggleExpand = { onToggleSection(SettingSection.STORAGE) },
+                    onNavigateToStorageLocations = onNavigateToStorageLocations,
+                    onSetScanOnAppLaunch = onSetScanOnAppLaunch,
+                    onSetIncludeHiddenFiles = onSetIncludeHiddenFiles,
+                    onTriggerIncrementalScan = onTriggerIncrementalScan,
+                    onTriggerFullScan = onTriggerFullScan,
+                    onCancelScan = onCancelScan
+                )
             }
 
             // 8. PRIVACY
@@ -426,13 +451,40 @@ fun SettingsScreen(
                     onToggleExpand = { onToggleSection(SettingSection.PRIVACY) }
                 ) {
                     SettingInfoRow(
-                        title = "Privacy Architecture",
-                        value = "100% Offline",
-                        description = "Nexus Player never transmits analytics or telemetry off-device."
+                        title = "Local-First Architecture",
+                        value = "100% On-Device",
+                        description = "All media indexes, playback states, and preferences reside strictly on device"
+                    )
+                    SettingInfoRow(
+                        title = "Account-Free",
+                        value = "No Sign-In",
+                        description = "No registration, profile creation, or account credentials required"
+                    )
+                    SettingInfoRow(
+                        title = "Cloud-Free",
+                        value = "Zero Cloud Sync",
+                        description = "No remote servers, cloud backups, or off-device network synchronization"
+                    )
+                    SettingInfoRow(
+                        title = "Telemetry-Free",
+                        value = "Zero Tracking",
+                        description = "Zero diagnostic telemetry, usage tracking, or advertising SDKs"
+                    )
+
+                    VerticalSpacer(NexusTheme.spacing.extraSmall)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                    VerticalSpacer(NexusTheme.spacing.extraSmall)
+
+                    SettingActionRow(
+                        title = "Clear Watch History",
+                        description = "Reset playback progress, resume positions, and completion markers",
+                        trailingIcon = Icons.Outlined.DeleteSweep,
+                        isDestructive = true,
+                        onClick = onOpenClearHistoryDialog
                     )
                     SettingActionRow(
-                        title = "Clear Watch History & Analytics",
-                        description = "Reset playback progress, watch counts, and statistics.",
+                        title = "Clear All Analytics & History",
+                        description = "Reset all watch time statistics, play counts, and history records",
                         trailingIcon = Icons.Outlined.DeleteSweep,
                         isDestructive = true,
                         onClick = onOpenClearAnalyticsDialog
@@ -475,19 +527,31 @@ fun SettingsScreen(
                 ) {
                     SettingInfoRow(
                         title = "Application",
-                        value = uiState.settings.about.appName
+                        value = uiState.settings.about.appName,
+                        description = "Modern, privacy-first offline video player"
                     )
                     SettingInfoRow(
                         title = "Version",
-                        value = "${uiState.settings.about.versionName} (${uiState.settings.about.buildType})"
+                        value = "${uiState.settings.about.versionName} (${uiState.settings.about.buildType})",
+                        description = "Built for Android with Jetpack Compose & Media3"
                     )
-                    SettingInfoRow(
-                        title = "License",
-                        value = uiState.settings.about.license
+                    SettingActionRow(
+                        title = "Project Information",
+                        description = "Architecture, capabilities, and offline design philosophy",
+                        trailingIcon = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        onClick = { onOpenAboutDialog(AboutDialogType.PROJECT_INFO) }
                     )
-                    SettingInfoRow(
-                        title = "Security Standard",
-                        value = uiState.settings.about.privacyStatus
+                    SettingActionRow(
+                        title = "Open Source Licenses",
+                        description = "Third-party libraries, notices, and attribution",
+                        trailingIcon = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        onClick = { onOpenAboutDialog(AboutDialogType.LICENSES) }
+                    )
+                    SettingActionRow(
+                        title = "Acknowledgements",
+                        description = "Credits and gratitude to foundational open-source projects",
+                        trailingIcon = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        onClick = { onOpenAboutDialog(AboutDialogType.ACKNOWLEDGEMENTS) }
                     )
                 }
             }
@@ -497,7 +561,7 @@ fun SettingsScreen(
     // Modal Selection Dialogs
     when (activeDialog) {
         ActiveDialog.PLAYBACK_SPEED -> {
-            val speedOptions = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+            val speedOptions = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
             SettingSelectionDialog(
                 title = "Default Playback Speed",
                 options = speedOptions,
@@ -528,7 +592,7 @@ fun SettingsScreen(
             )
         }
         ActiveDialog.SEEK_DURATION -> {
-            val seekOptions = listOf(5, 10, 15, 30)
+            val seekOptions = listOf(5, 10, 15, 30, 60)
             SettingSelectionDialog(
                 title = "Seek Duration",
                 options = seekOptions,
@@ -570,23 +634,14 @@ fun SettingsScreen(
                 getLabel = { it }
             )
         }
-        ActiveDialog.SUBTITLE_SCALE -> {
-            val scales = listOf(0.8f, 1.0f, 1.25f, 1.5f)
+        ActiveDialog.SUBTITLE_TRACK_BEHAVIOR -> {
             SettingSelectionDialog(
-                title = "Subtitle Font Size",
-                options = scales,
-                selectedOption = uiState.settings.subtitles.fontSizeScale,
-                onOptionSelected = onSetSubtitleFontScale,
+                title = "Default Track Selection Behavior",
+                options = DefaultSubtitleTrackBehavior.entries,
+                selectedOption = uiState.settings.subtitles.defaultTrackBehavior,
+                onOptionSelected = onSetDefaultSubtitleTrackBehavior,
                 onDismissRequest = { activeDialog = null },
-                getLabel = { scale ->
-                    when (scale) {
-                        0.8f -> "Small (0.8x)"
-                        1.0f -> "Normal (1.0x)"
-                        1.25f -> "Large (1.25x)"
-                        1.5f -> "Extra Large (1.5x)"
-                        else -> "${scale}x"
-                    }
-                }
+                getLabel = { it.label }
             )
         }
         ActiveDialog.LIBRARY_LAYOUT -> {
@@ -605,16 +660,6 @@ fun SettingsScreen(
                 options = LibrarySort.values().toList(),
                 selectedOption = uiState.settings.library.defaultSortOption,
                 onOptionSelected = onSetDefaultSortOption,
-                onDismissRequest = { activeDialog = null },
-                getLabel = { it.label }
-            )
-        }
-        ActiveDialog.SCAN_BEHAVIOR -> {
-            SettingSelectionDialog(
-                title = "Scan Behavior",
-                options = ScanBehavior.values().toList(),
-                selectedOption = uiState.settings.library.scanBehavior,
-                onOptionSelected = onSetScanBehavior,
                 onDismissRequest = { activeDialog = null },
                 getLabel = { it.label }
             )
@@ -656,11 +701,33 @@ fun SettingsScreen(
         null -> { /* No dialog active */ }
     }
 
+    // Confirmation dialog for destructive playback history reset
+    if (uiState.isClearHistoryDialogOpen) {
+        ClearHistoryDialog(
+            onConfirm = onConfirmClearHistory,
+            onDismiss = onDismissClearHistory
+        )
+    }
+
     // Confirmation dialog for destructive analytics/history reset
     if (uiState.isClearAnalyticsDialogOpen) {
         ClearAnalyticsDialog(
             onConfirm = onConfirmClearAnalytics,
             onDismiss = onDismissClearAnalytics
         )
+    }
+
+    // About Section Dialogs
+    when (uiState.activeAboutDialog) {
+        AboutDialogType.PROJECT_INFO -> {
+            ProjectInfoDialog(onDismiss = onDismissAboutDialog)
+        }
+        AboutDialogType.LICENSES -> {
+            LicensesDialog(onDismiss = onDismissAboutDialog)
+        }
+        AboutDialogType.ACKNOWLEDGEMENTS -> {
+            AcknowledgementsDialog(onDismiss = onDismissAboutDialog)
+        }
+        null -> { /* No about dialog active */ }
     }
 }

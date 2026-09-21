@@ -69,6 +69,8 @@ class VideoRepositoryImpl @Inject constructor(
             VideoSortOrder.SIZE_ASC -> videoDao.getAllVideosBySizeAsc()
             VideoSortOrder.LAST_PLAYED_DESC -> videoDao.getAllVideosByLastPlayedDesc()
             VideoSortOrder.LAST_PLAYED_ASC -> videoDao.getAllVideosByLastPlayedAsc()
+            VideoSortOrder.DATE_MODIFIED_DESC -> videoDao.getAllVideosByDateModifiedDesc()
+            VideoSortOrder.DATE_MODIFIED_ASC -> videoDao.getAllVideosByDateModifiedAsc()
         }
         return entityFlow
             .map { entities -> entities.map { it.asDomain() } }
@@ -186,7 +188,51 @@ class VideoRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteStaleVideos(validIds: List<String>) = withContext(ioDispatcher) {
-        videoDao.deleteStaleVideos(validIds)
+        val allScan = videoDao.getAllScanLookup()
+        val validSet = validIds.toHashSet()
+        val toDelete = allScan.map { it.id }.filter { !validSet.contains(it) }
+        if (toDelete.isNotEmpty()) {
+            toDelete.chunked(500).forEach { chunk ->
+                videoDao.deleteVideosByIds(chunk)
+            }
+        }
+    }
+
+    override suspend fun deleteStaleVideosInFolders(
+        validIds: List<String>,
+        scannedFolderPaths: List<String>
+    ) = withContext(ioDispatcher) {
+        if (scannedFolderPaths.isEmpty()) return@withContext
+        if (validIds.isEmpty()) {
+            videoDao.deleteVideosInFolders(scannedFolderPaths)
+        } else {
+            val existingIds = videoDao.getVideoIdsInFolders(scannedFolderPaths)
+            val validSet = validIds.toHashSet()
+            val toDelete = existingIds.filter { !validSet.contains(it) }
+            if (toDelete.isNotEmpty()) {
+                toDelete.chunked(500).forEach { chunk ->
+                    videoDao.deleteVideosByIds(chunk)
+                }
+            }
+        }
+    }
+
+    override suspend fun getAllScanLookup(): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> = withContext(ioDispatcher) {
+        videoDao.getAllScanLookup().associateBy { it.id }
+    }
+
+    override suspend fun getScanLookupForFolder(folderPath: String): Map<String, com.nexus.player.core.database.dao.VideoScanLookup> = withContext(ioDispatcher) {
+        videoDao.getScanLookupForFolder(folderPath).associateBy { it.id }
+    }
+
+    override fun getFolderSummaryByPath(folderPath: String): Flow<VideoFolder?> {
+        return videoDao.getFolderSummaryByPath(folderPath)
+            .map { it?.asDomain() }
+            .flowOn(ioDispatcher)
+    }
+
+    override suspend fun deleteVideosInFolder(folderPath: String) = withContext(ioDispatcher) {
+        videoDao.deleteVideosInFolder(folderPath)
     }
 
     override suspend fun clearAll() = withContext(ioDispatcher) {
@@ -297,10 +343,17 @@ class VideoRepositoryImpl @Inject constructor(
         }
     }
 
+    private val dateFormatter = ThreadLocal.withInitial {
+        SimpleDateFormat("MMMM d yyyy", Locale.US)
+    }
+    private val yearFormatter = ThreadLocal.withInitial {
+        SimpleDateFormat("yyyy", Locale.US)
+    }
+
     private fun formatDateInternal(epochMillis: Long): String {
         if (epochMillis <= 0) return ""
         return try {
-            SimpleDateFormat("MMMM d yyyy", Locale.US).format(Date(epochMillis))
+            dateFormatter.get()?.format(Date(epochMillis)) ?: ""
         } catch (_: Exception) {
             ""
         }
@@ -309,7 +362,7 @@ class VideoRepositoryImpl @Inject constructor(
     private fun getYearFromEpoch(epochMillis: Long): String {
         if (epochMillis <= 0) return ""
         return try {
-            SimpleDateFormat("yyyy", Locale.US).format(Date(epochMillis))
+            yearFormatter.get()?.format(Date(epochMillis)) ?: ""
         } catch (_: Exception) {
             ""
         }

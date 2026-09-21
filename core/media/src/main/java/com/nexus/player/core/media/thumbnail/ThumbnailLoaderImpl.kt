@@ -50,7 +50,9 @@ class ThumbnailLoaderImpl @Inject constructor(
         targetWidth: Int,
         targetHeight: Int
     ): Bitmap? = withContext(ioDispatcher) {
-        if (mediaUri.isBlank()) return@withContext null
+        if (mediaUri.isBlank() || mediaUri.startsWith("http://", ignoreCase = true) || mediaUri.startsWith("https://", ignoreCase = true)) {
+            return@withContext null
+        }
 
         val cacheKey = buildCacheKey(mediaUri, targetWidth, targetHeight)
 
@@ -61,6 +63,10 @@ class ThumbnailLoaderImpl @Inject constructor(
 
         // Step 2: Decode under concurrency gate
         val cancellationSignal = CancellationSignal()
+        val currentJob = currentCoroutineContext()[kotlinx.coroutines.Job]
+        val completionHandler = currentJob?.invokeOnCompletion {
+            cancellationSignal.cancel()
+        }
         try {
             decodingSemaphore.withPermit {
                 currentCoroutineContext().ensureActive()
@@ -88,6 +94,8 @@ class ThumbnailLoaderImpl @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Thumbnail decoding failed for $mediaUri: ${e.message}")
             null
+        } finally {
+            completionHandler?.dispose()
         }
     }
 

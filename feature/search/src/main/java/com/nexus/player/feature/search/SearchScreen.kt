@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import com.nexus.player.core.database.model.VideoFolder
 import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -82,7 +83,8 @@ fun SearchScreen(
                     result.onSuccess { renamed ->
                         snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Rename", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -94,7 +96,8 @@ fun SearchScreen(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Moved to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Move", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -106,7 +109,8 @@ fun SearchScreen(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Copied to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Copy", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -124,7 +128,8 @@ fun SearchScreen(
                             viewModel.restoreDeletedVideo(video.id) { restoreResult ->
                                 if (restoreResult.isFailure) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                        val restoreMsg = UserFeedbackFormatter.formatFileError("Restore", restoreResult.exceptionOrNull())
+                                        snackbarHostState.showSnackbar(restoreMsg.ifBlank { "Failed to restore video" })
                                     }
                                 }
                             }
@@ -132,7 +137,8 @@ fun SearchScreen(
                             viewModel.purgeStagedDeletions()
                         }
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Delete", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }

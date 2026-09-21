@@ -45,6 +45,8 @@ import com.nexus.player.feature.player.dialog.SleepTimerDialog
 import com.nexus.player.feature.player.orientation.rememberPlayerOrientationController
 import com.nexus.player.feature.player.panel.PlayerPanelState
 import com.nexus.player.feature.player.panel.rememberPlayerPanelState
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
 /**
@@ -82,8 +84,18 @@ fun PlayerRoute(
     val panelState = rememberPlayerPanelState()
     val orientationController = rememberPlayerOrientationController()
 
-    val playerState by viewModel.player.state.collectAsStateWithLifecycle()
-    val isLandscapeVideo = playerState.isLandscapeVideo
+    val isLandscapeVideo by remember(viewModel.player) {
+        viewModel.player.state
+            .map { it.isLandscapeVideo }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false)
+
+    val subtitleAppearance by remember(viewModel.player) {
+        viewModel.player.state
+            .map { it.subtitleAppearance }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = com.nexus.player.core.playback.model.SubtitleAppearance.DEFAULT)
+
     val seekDurationSeconds by viewModel.seekDurationSeconds.collectAsStateWithLifecycle()
     val isAutoNextEnabled by viewModel.isAutoNextEnabled.collectAsStateWithLifecycle()
 
@@ -185,24 +197,27 @@ fun PlayerRoute(
         viewModel.setFullscreen(true)
     }
 
-    // Intercept back button when dialogs/panels are open
-    BackHandler(enabled = showSleepTimerDialog) {
-        showSleepTimerDialog = false
-    }
-
-    BackHandler(enabled = showEqualizerDialog && !showSleepTimerDialog) {
-        showEqualizerDialog = false
-    }
-
-    BackHandler(enabled = showAudioSubtitlesSheet && !showSleepTimerDialog && !showEqualizerDialog) {
-        showAudioSubtitlesSheet = false
-    }
-
-    BackHandler(enabled = panelState.isOpen && !showAudioSubtitlesSheet && !showSleepTimerDialog && !showEqualizerDialog) {
-        if (!panelState.navigateBack()) {
-            panelState.close()
-            viewModel.setPanelOpen(false)
+    val handleBackClick: () -> Unit = {
+        if (showSleepTimerDialog) {
+            showSleepTimerDialog = false
+        } else if (showEqualizerDialog) {
+            showEqualizerDialog = false
+        } else if (showAudioSubtitlesSheet) {
+            showAudioSubtitlesSheet = false
+        } else if (panelState.isOpen) {
+            if (!panelState.navigateBack()) {
+                panelState.close()
+                viewModel.setPanelOpen(false)
+            }
+        } else {
+            orientationController.resetToAppDefault()
+            onBackClick()
         }
+    }
+
+    // Intercept back gestures and buttons with unified handler
+    BackHandler {
+        handleBackClick()
     }
 
     val window = activity?.window
@@ -231,22 +246,6 @@ fun PlayerRoute(
     val onToggleOrientationLock: () -> Unit = {
         orientationController.toggleOrientationLock()
         viewModel.setOrientationLocked(orientationController.isOrientationLocked)
-    }
-
-    val handleBackClick: () -> Unit = {
-        if (showSleepTimerDialog) {
-            showSleepTimerDialog = false
-        } else if (showEqualizerDialog) {
-            showEqualizerDialog = false
-        } else if (showAudioSubtitlesSheet) {
-            showAudioSubtitlesSheet = false
-        } else if (panelState.isOpen) {
-            panelState.close()
-            viewModel.setPanelOpen(false)
-        } else {
-            orientationController.resetToAppDefault()
-            onBackClick()
-        }
     }
 
     val onBrightnessDelta: (Float) -> Unit = { delta ->
@@ -311,9 +310,14 @@ fun PlayerRoute(
         if (uriToShare != null) {
             val sendIntent = Intent().apply {
                 action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(uriToShare))
-                putExtra(Intent.EXTRA_TEXT, video?.title ?: "Video")
-                type = "video/*"
+                if (uriToShare.startsWith("http://", ignoreCase = true) || uriToShare.startsWith("https://", ignoreCase = true)) {
+                    putExtra(Intent.EXTRA_TEXT, uriToShare)
+                    type = "text/plain"
+                } else {
+                    putExtra(Intent.EXTRA_STREAM, Uri.parse(uriToShare))
+                    putExtra(Intent.EXTRA_TEXT, video?.title ?: "Video")
+                    type = "video/*"
+                }
             }
             val shareIntent = Intent.createChooser(sendIntent, "Share video via")
             context.startActivity(shareIntent)
@@ -365,7 +369,7 @@ fun PlayerRoute(
         onToggleSubtitles = { viewModel.setSubtitlesEnabled(it) },
         onAudioDelayChange = { viewModel.setAudioDelayMs(it) },
         onSubtitleDelayChange = { viewModel.setSubtitleDelayMs(it) },
-        subtitleAppearance = playerState.subtitleAppearance,
+        subtitleAppearance = subtitleAppearance,
         onSubtitleAppearanceChange = { viewModel.setSubtitleAppearance(it) },
         onAddExternalSubtitleClick = {
             subtitlePickerLauncher.launch(
@@ -447,8 +451,6 @@ fun PlayerScreen(
     onSelectEqualizerPreset: (String) -> Unit = {},
     onEqualizerBandChange: (Int, Int) -> Unit = { _, _ -> }
 ) {
-    val playerState by player.state.collectAsStateWithLifecycle()
-
     PlayerLayout(
         panelState = panelState,
         uiState = uiState,
@@ -552,6 +554,7 @@ fun PlayerScreen(
     )
 
     if (showAudioSubtitlesSheet) {
+        val playerState by player.state.collectAsStateWithLifecycle()
         AudioSubtitlesSheet(
             audioTracks = playerState.audioTracks,
             subtitleTracks = playerState.subtitleTracks,

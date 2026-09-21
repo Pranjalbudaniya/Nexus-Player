@@ -168,6 +168,23 @@ class AudioEffectsControllerImpl : AudioEffectsController {
     }
 
     private fun applyPresetInternal(presetName: String) {
+        if (presetName.equals("Custom", ignoreCase = true)) {
+            val eq = equalizer
+            if (eq != null) {
+                _bandLevels.value.forEach { (index, gain) ->
+                    if (index < eq.numberOfBands) {
+                        try {
+                            val clamped = gain.coerceIn(_bandLevelRange.first, _bandLevelRange.last)
+                            eq.setBandLevel(index.toShort(), clamped.toShort())
+                        } catch (e: Throwable) {
+                            Log.w(TAG, "Failed to set custom band $index level to $gain mB", e)
+                        }
+                    }
+                }
+            }
+            return
+        }
+
         val preset = EqualizerPreset.fromName(presetName)
         val eq = equalizer
         val levelsMap = mutableMapOf<Int, Int>()
@@ -200,6 +217,28 @@ class AudioEffectsControllerImpl : AudioEffectsController {
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Failed to set band $bandIndex to $clamped mB", e)
+        }
+    }
+
+    override fun setBandLevels(levels: Map<Int, Int>) {
+        val updated = _bandLevels.value.toMutableMap()
+        levels.forEach { (index, levelmB) ->
+            updated[index] = levelmB.coerceIn(_bandLevelRange.first, _bandLevelRange.last)
+        }
+        _bandLevels.value = updated
+        _currentPreset.value = "Custom"
+
+        val eq = equalizer
+        if (eq != null) {
+            updated.forEach { (index, clamped) ->
+                if (index < eq.numberOfBands) {
+                    try {
+                        eq.setBandLevel(index.toShort(), clamped.toShort())
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Failed to set band $index to $clamped mB", e)
+                    }
+                }
+            }
         }
     }
 

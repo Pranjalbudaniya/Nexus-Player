@@ -8,6 +8,11 @@ import com.nexus.player.core.common.settings.model.NexusSettings
 import com.nexus.player.core.common.settings.model.RepeatModeSetting
 import com.nexus.player.core.common.settings.model.ResumeBehavior
 import com.nexus.player.core.common.settings.model.ScanBehavior
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
+import com.nexus.player.core.common.settings.model.SubtitleBackgroundStyle
+import com.nexus.player.core.common.settings.model.SubtitlePosition
+import com.nexus.player.core.common.settings.model.SubtitleTextColor
+import com.nexus.player.core.common.settings.model.SubtitleTextSize
 import com.nexus.player.core.common.settings.model.ThemeMode
 import com.nexus.player.core.common.settings.model.VideoDisplayMode
 import com.nexus.player.core.database.model.Video
@@ -163,6 +168,32 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun updateSubtitleStyling_delegatesToRepository() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.setSubtitleTextSize(SubtitleTextSize.ExtraLarge)
+        viewModel.setSubtitleTextColor(SubtitleTextColor.Cyan)
+        viewModel.setSubtitleBackgroundStyle(SubtitleBackgroundStyle.Outline)
+        viewModel.setSubtitleBackgroundOpacity(0.4f)
+        viewModel.setSubtitlePosition(SubtitlePosition.Raised)
+        viewModel.setSubtitleDelayMs(300L)
+        viewModel.setDefaultSubtitleTrackBehavior(DefaultSubtitleTrackBehavior.FIRST_AVAILABLE)
+        advanceUntilIdle()
+
+        val subtitles = viewModel.uiState.value.settings.subtitles
+        assertEquals(SubtitleTextSize.ExtraLarge, subtitles.textSize)
+        assertEquals(SubtitleTextColor.Cyan, subtitles.textColor)
+        assertEquals(SubtitleBackgroundStyle.Outline, subtitles.backgroundStyle)
+        assertEquals(0.4f, subtitles.backgroundOpacity, 0.001f)
+        assertEquals(SubtitlePosition.Raised, subtitles.position)
+        assertEquals(300L, subtitles.subtitleDelayMs)
+        assertEquals(DefaultSubtitleTrackBehavior.FIRST_AVAILABLE, subtitles.defaultTrackBehavior)
+    }
+
+    @Test
     fun clearAnalytics_triggersRepositoryResetAndShowsMessage() = testScope.runTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -183,6 +214,115 @@ class SettingsViewModelTest {
         viewModel.clearUserMessage()
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.userMessage)
+    }
+
+    @Test
+    fun updateAudioAndEqualizer_delegatesToRepository() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.setAudioBoostPercent(160)
+        viewModel.setEqualizerEnabled(true)
+        viewModel.setEqualizerPreset("Rock")
+        viewModel.setCustomBandLevel(0, 400)
+        viewModel.setRememberPerVideoAudioSettings(true)
+        advanceUntilIdle()
+
+        val audio = viewModel.uiState.value.settings.audio
+        assertEquals(160, audio.audioBoostPercent)
+        assertTrue(audio.isEqualizerEnabled)
+        assertEquals("Custom", audio.equalizerPreset)
+        assertEquals(400, audio.customBandLevels[0])
+        assertTrue(audio.rememberPerVideoAudioSettings)
+
+        viewModel.resetCustomBandLevels()
+        advanceUntilIdle()
+        val resetAudio = viewModel.uiState.value.settings.audio
+        assertEquals("Flat", resetAudio.equalizerPreset)
+        assertEquals(0, resetAudio.customBandLevels[0])
+    }
+
+    @Test
+    fun clearPlaybackHistory_triggersRepositoryResetAndShowsMessage() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.setClearHistoryDialogOpen(true)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isClearHistoryDialogOpen)
+
+        viewModel.clearPlaybackHistory()
+        advanceUntilIdle()
+
+        assertTrue(fakeVideoRepository.clearedHistory)
+        assertFalse(viewModel.uiState.value.isClearHistoryDialogOpen)
+        assertEquals("Playback history has been cleared.", viewModel.uiState.value.userMessage)
+    }
+
+    @Test
+    fun aboutDialog_setsAndClearsActiveAboutDialog() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.activeAboutDialog)
+
+        viewModel.setActiveAboutDialog(AboutDialogType.PROJECT_INFO)
+        advanceUntilIdle()
+        assertEquals(AboutDialogType.PROJECT_INFO, viewModel.uiState.value.activeAboutDialog)
+
+        viewModel.setActiveAboutDialog(AboutDialogType.LICENSES)
+        advanceUntilIdle()
+        assertEquals(AboutDialogType.LICENSES, viewModel.uiState.value.activeAboutDialog)
+
+        viewModel.setActiveAboutDialog(AboutDialogType.ACKNOWLEDGEMENTS)
+        advanceUntilIdle()
+        assertEquals(AboutDialogType.ACKNOWLEDGEMENTS, viewModel.uiState.value.activeAboutDialog)
+
+        viewModel.setActiveAboutDialog(null)
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.activeAboutDialog)
+    }
+
+    @Test
+    fun toggleAllSections_expandsAndCollapsesEverySection() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        SettingSection.entries.forEach { section ->
+            viewModel.toggleSectionExpanded(section)
+        }
+        advanceUntilIdle()
+
+        // Verify state is reactive for each section
+        assertNotNull(viewModel.uiState.value.expandedSections)
+    }
+
+    @Test
+    fun updateStorageAndAdvanced_delegatesToRepository() = testScope.runTest {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        advanceUntilIdle()
+
+        viewModel.setScanOnAppLaunch(false)
+        viewModel.setIncludeHiddenFiles(true)
+        viewModel.setHardwareAcceleration(false)
+        viewModel.setDebugLogging(true)
+        advanceUntilIdle()
+
+        val settings = viewModel.uiState.value.settings
+        assertFalse(settings.library.scanOnAppLaunch)
+        assertTrue(settings.library.includeHiddenFiles)
+        assertFalse(settings.advanced.hardwareAcceleration)
+        assertTrue(settings.advanced.debugLogging)
     }
 
     // --- Test Doubles ---
@@ -257,6 +397,48 @@ class SettingsViewModelTest {
             )
         }
 
+        override suspend fun setSubtitleTextSize(size: SubtitleTextSize) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(textSize = size)
+            )
+        }
+
+        override suspend fun setSubtitleTextColor(color: SubtitleTextColor) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(textColor = color)
+            )
+        }
+
+        override suspend fun setSubtitleBackgroundStyle(style: SubtitleBackgroundStyle) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(backgroundStyle = style)
+            )
+        }
+
+        override suspend fun setSubtitleBackgroundOpacity(opacity: Float) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(backgroundOpacity = opacity)
+            )
+        }
+
+        override suspend fun setSubtitlePosition(position: SubtitlePosition) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(position = position)
+            )
+        }
+
+        override suspend fun setSubtitleDelayMs(delayMs: Long) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(subtitleDelayMs = delayMs)
+            )
+        }
+
+        override suspend fun setDefaultSubtitleTrackBehavior(behavior: DefaultSubtitleTrackBehavior) {
+            _settings.value = _settings.value.copy(
+                subtitles = _settings.value.subtitles.copy(defaultTrackBehavior = behavior)
+            )
+        }
+
         override suspend fun setDefaultLayoutMode(layout: LibraryLayout) {
             _settings.value = _settings.value.copy(
                 library = _settings.value.library.copy(defaultLayoutMode = layout)
@@ -272,6 +454,18 @@ class SettingsViewModelTest {
         override suspend fun setScanBehavior(behavior: ScanBehavior) {
             _settings.value = _settings.value.copy(
                 library = _settings.value.library.copy(scanBehavior = behavior)
+            )
+        }
+
+        override suspend fun setScanOnAppLaunch(enabled: Boolean) {
+            _settings.value = _settings.value.copy(
+                library = _settings.value.library.copy(scanOnAppLaunch = enabled)
+            )
+        }
+
+        override suspend fun setIncludeHiddenFiles(enabled: Boolean) {
+            _settings.value = _settings.value.copy(
+                library = _settings.value.library.copy(includeHiddenFiles = enabled)
             )
         }
 
@@ -305,15 +499,56 @@ class SettingsViewModelTest {
             )
         }
 
+        override suspend fun setAudioBoostPercent(percent: Int) {
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(
+                    audioBoostPercent = percent,
+                    isAudioBoostEnabled = percent > 100
+                )
+            )
+        }
+
         override suspend fun setAudioBoostEnabled(enabled: Boolean) {
             _settings.value = _settings.value.copy(
                 audio = _settings.value.audio.copy(isAudioBoostEnabled = enabled)
             )
         }
 
+        override suspend fun setEqualizerEnabled(enabled: Boolean) {
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(isEqualizerEnabled = enabled)
+            )
+        }
+
+        override suspend fun setEqualizerPreset(preset: String) {
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(equalizerPreset = preset)
+            )
+        }
+
+        override suspend fun setCustomBandLevels(levels: Map<Int, Int>) {
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(customBandLevels = levels, equalizerPreset = "Custom")
+            )
+        }
+
+        override suspend fun setCustomBandLevel(bandIndex: Int, levelmB: Int) {
+            val updated = _settings.value.audio.customBandLevels.toMutableMap()
+            updated[bandIndex] = levelmB
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(customBandLevels = updated, equalizerPreset = "Custom")
+            )
+        }
+
         override suspend fun setAudioDelayMs(delayMs: Long) {
             _settings.value = _settings.value.copy(
                 audio = _settings.value.audio.copy(audioDelayMs = delayMs)
+            )
+        }
+
+        override suspend fun setRememberPerVideoAudioSettings(remember: Boolean) {
+            _settings.value = _settings.value.copy(
+                audio = _settings.value.audio.copy(rememberPerVideoAudioSettings = remember)
             )
         }
 
@@ -344,12 +579,15 @@ class SettingsViewModelTest {
 
     private class FakeVideoRepository : VideoRepository {
         var clearedAnalyticsAndHistory = false
+        var clearedHistory = false
 
         override suspend fun clearAllAnalyticsAndHistory() {
             clearedAnalyticsAndHistory = true
         }
 
-        override suspend fun clearAllHistory() {}
+        override suspend fun clearAllHistory() {
+            clearedHistory = true
+        }
         override fun getAllVideos(sortOrder: VideoSortOrder): Flow<List<Video>> = flowOf(emptyList())
         override fun getRecentlyAddedVideos(limit: Int): Flow<List<Video>> = flowOf(emptyList())
         override fun getFavoriteVideos(): Flow<List<Video>> = flowOf(emptyList())

@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.player.core.designsystem.theme.NexusTheme
+import com.nexus.player.core.ui.component.NexusEmptyState
+import com.nexus.player.core.ui.component.NexusErrorState
+import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.feature.playlists.component.CreatePlaylistDialog
 import com.nexus.player.feature.playlists.component.DeletePlaylistConfirmationDialog
 import com.nexus.player.feature.playlists.component.PlaylistCard
@@ -180,57 +183,35 @@ fun PlaylistsContent(
             }
 
             when {
+                uiState.isLoading -> {
+                    NexusLoadingIndicator()
+                }
+                uiState.errorMessage != null -> {
+                    NexusErrorState(
+                        message = uiState.errorMessage,
+                        actionText = null,
+                        onActionClick = null
+                    )
+                }
                 uiState.isEmpty -> {
-                    // Empty State
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.large),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(spacing.medium)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Text(
-                                text = "No playlists yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Create custom playlists to organize and queue your favorite videos",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(spacing.small))
-                            Button(onClick = onOpenCreateDialog) {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                                Spacer(modifier = Modifier.size(spacing.small))
-                                Text("Create Playlist")
-                            }
-                        }
-                    }
+                    NexusEmptyState(
+                        icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                        title = "No playlists yet",
+                        description = "Create custom playlists to organize and queue your favorite videos.",
+                        actionText = "Create Playlist",
+                        actionIcon = Icons.Default.Add,
+                        onActionClick = onOpenCreateDialog
+                    )
                 }
                 uiState.isSearchEmpty -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.large),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No playlists matching \"${uiState.searchQuery}\"",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    NexusEmptyState(
+                        icon = Icons.Default.Search,
+                        title = "No playlists found",
+                        description = "No playlist matches \"${uiState.searchQuery}\".",
+                        actionText = "Clear Search",
+                        actionIcon = Icons.Default.Clear,
+                        onActionClick = { onSearchQueryChange("") }
+                    )
                 }
                 else -> {
                     // Playlists List

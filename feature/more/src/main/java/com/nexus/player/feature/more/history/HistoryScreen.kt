@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -52,6 +53,15 @@ import com.nexus.player.feature.more.component.ClearHistoryDialog
 import com.nexus.player.feature.more.component.HistoryItemRow
 import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import com.nexus.player.core.ui.component.NexusEmptyState
+import com.nexus.player.core.ui.component.NexusErrorState
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
+import kotlinx.coroutines.launch
+import java.io.File
+
 @Composable
 fun HistoryRoute(
     onNavigateBack: () -> Unit,
@@ -60,6 +70,8 @@ fun HistoryRoute(
     modifier: Modifier = Modifier,
     viewModel: MoreViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedVideoForMenu by viewModel.selectedVideoForMenu.collectAsStateWithLifecycle()
@@ -80,7 +92,20 @@ fun HistoryRoute(
             onNavigateToPlayer(videoId)
         },
         onSearchQueryChange = { viewModel.setSearchQuery(it) },
-        onClearItem = { videoId -> viewModel.clearHistoryItem(videoId) },
+        onClearItem = { videoId ->
+            viewModel.clearHistoryItem(videoId) { item ->
+                scope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = "Removed \"${item.title}\" from history",
+                        actionLabel = "Undo",
+                        duration = SnackbarDuration.Short
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoClearHistoryItem()
+                    }
+                }
+            }
+        },
         onClearAllClick = { viewModel.setClearAllDialogOpen(true) },
         onConfirmClearAll = { viewModel.clearAllHistory() },
         onDismissClearAll = { viewModel.setClearAllDialogOpen(false) },
@@ -88,12 +113,74 @@ fun HistoryRoute(
         onDismissContextMenu = { viewModel.onDismissContextMenu() },
         onAddToPlaylist = { video -> videoForAddToPlaylist = video },
         onToggleFavorite = { video -> viewModel.onToggleFavorite(video) },
-        onShare = { },
+        onShare = { video -> viewModel.fileOperationsManager.shareVideo(context, video) },
         onOpenContainingFolder = { path, name -> onFolderClick(path, name) },
-        onRenameConfirm = { video, newName -> viewModel.onRenameConfirm(video, newName) },
-        onMoveConfirm = { video, targetPath -> viewModel.onMoveConfirm(video, targetPath) },
-        onCopyConfirm = { video, targetPath -> viewModel.onCopyConfirm(video, targetPath) },
-        onDeleteConfirm = { video -> viewModel.onDeleteConfirm(video) },
+        onRenameConfirm = { video, newName ->
+            viewModel.onRenameConfirm(video, newName) { result ->
+                scope.launch {
+                    result.onSuccess { renamed ->
+                        snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
+                    }.onFailure { error ->
+                        val msg = UserFeedbackFormatter.formatFileError("Rename", error)
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                }
+            }
+        },
+        onMoveConfirm = { video, targetPath ->
+            viewModel.onMoveConfirm(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Moved to $folderName")
+                    }.onFailure { error ->
+                        val msg = UserFeedbackFormatter.formatFileError("Move", error)
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                }
+            }
+        },
+        onCopyConfirm = { video, targetPath ->
+            viewModel.onCopyConfirm(video, targetPath) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val folderName = File(targetPath).name.ifEmpty { "selected folder" }
+                        snackbarHostState.showSnackbar("Copied to $folderName")
+                    }.onFailure { error ->
+                        val msg = UserFeedbackFormatter.formatFileError("Copy", error)
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                }
+            }
+        },
+        onDeleteConfirm = { video ->
+            viewModel.onDeleteConfirm(video) { result ->
+                scope.launch {
+                    result.onSuccess {
+                        val snackbarResult = snackbarHostState.showSnackbar(
+                            message = "Deleted \"${video.title}\"",
+                            actionLabel = "Undo",
+                            duration = SnackbarDuration.Short
+                        )
+                        if (snackbarResult == SnackbarResult.ActionPerformed) {
+                            viewModel.restoreDeletedVideo(video.id) { restoreResult ->
+                                if (restoreResult.isFailure) {
+                                    scope.launch {
+                                        val restoreMsg = UserFeedbackFormatter.formatFileError("Restore", restoreResult.exceptionOrNull())
+                                        snackbarHostState.showSnackbar(restoreMsg.ifBlank { "Failed to restore video" })
+                                    }
+                                }
+                            }
+                        } else {
+                            viewModel.purgeStagedDeletions()
+                        }
+                    }.onFailure { error ->
+                        val msg = UserFeedbackFormatter.formatFileError("Delete", error)
+                        snackbarHostState.showSnackbar(msg)
+                    }
+                }
+            }
+        },
         snackbarHostState = snackbarHostState,
         modifier = modifier
     )
@@ -187,18 +274,11 @@ fun HistoryScreen(
                 }
 
                 is MoreUiState.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.medium),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = uiState.message,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+                    NexusErrorState(
+                        message = uiState.message,
+                        onActionClick = onNavigateBack,
+                        actionText = "Back"
+                    )
                 }
 
                 is MoreUiState.Success -> {
@@ -259,61 +339,22 @@ fun HistoryScreen(
                     }
 
                     if (allHistory.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(spacing.large),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(56.dp)
-                                )
-                                VerticalSpacer(spacing.medium)
-                                Text(
-                                    text = "No Watch History",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                VerticalSpacer(spacing.extraSmall)
-                                Text(
-                                    text = "Videos you start watching will automatically appear here",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        NexusEmptyState(
+                            icon = Icons.Default.History,
+                            title = "No Watch History",
+                            description = "Videos you start watching will automatically appear here for easy resumption.",
+                            actionText = "Browse Library",
+                            onActionClick = onNavigateBack
+                        )
                     } else if (filteredHistory.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(spacing.large),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                VerticalSpacer(spacing.medium)
-                                Text(
-                                    text = "No matching videos",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                VerticalSpacer(spacing.extraSmall)
-                                Text(
-                                    text = "No history entry matches \"$searchQuery\"",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                        NexusEmptyState(
+                            icon = Icons.Default.Search,
+                            title = "No Matching Videos",
+                            description = "No history entry matches \"$searchQuery\".",
+                            actionText = "Clear Search",
+                            actionIcon = Icons.Default.Clear,
+                            onActionClick = { onSearchQueryChange("") }
+                        )
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),

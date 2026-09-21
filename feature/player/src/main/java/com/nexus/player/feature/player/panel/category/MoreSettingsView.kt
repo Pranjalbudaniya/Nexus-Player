@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Share
@@ -240,43 +241,53 @@ fun MoreSettingsView(
         Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
 
         Text(
-            text = "File Information",
+            text = if (state.isNetworkMedia) "Stream Information" else "File Information",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(vertical = NexusTheme.spacing.small)
         )
 
         PlayerSettingItem(
-            title = "File Name",
+            title = if (state.isNetworkMedia) "Stream Title" else "File Name",
             subtitle = video?.fileName ?: state.videoTitle,
             leadingIcon = Icons.Filled.Info,
             onClick = {},
             enabled = false
         )
 
-        if (video?.folderPath != null) {
+        if (state.isNetworkMedia) {
             PlayerSettingItem(
-                title = "Folder Location",
-                subtitle = video.folderPath,
-                leadingIcon = Icons.Filled.Folder,
+                title = "Stream URL",
+                subtitle = state.videoId,
+                leadingIcon = Icons.Filled.Language,
                 onClick = {},
                 enabled = false
             )
-        }
+        } else {
+            if (video?.folderPath != null) {
+                PlayerSettingItem(
+                    title = "Folder Location",
+                    subtitle = video.folderPath,
+                    leadingIcon = Icons.Filled.Folder,
+                    onClick = {},
+                    enabled = false
+                )
+            }
 
-        if (video?.sizeBytes != null && video.sizeBytes > 0L) {
-            PlayerSettingItem(
-                title = "File Size",
-                subtitle = formatFileSize(video.sizeBytes),
-                leadingIcon = Icons.Filled.SdCard,
-                onClick = {},
-                enabled = false
-            )
+            if (video?.sizeBytes != null && video.sizeBytes > 0L) {
+                PlayerSettingItem(
+                    title = "File Size",
+                    subtitle = formatFileSize(video.sizeBytes),
+                    leadingIcon = Icons.Filled.SdCard,
+                    onClick = {},
+                    enabled = false
+                )
+            }
         }
 
         PlayerSettingItem(
             title = "Duration",
-            subtitle = formatDuration(state.durationMs),
+            subtitle = if (state.durationMs > 0L) formatDuration(state.durationMs) else if (state.isNetworkMedia) "Live / Unknown" else "00:00",
             leadingIcon = Icons.Filled.Timer,
             onClick = {},
             enabled = false

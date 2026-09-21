@@ -26,6 +26,7 @@ class StorageAccessRepositoryImpl @Inject constructor(
         val ONBOARDING_COMPLETED = booleanPreferencesKey("key_onboarding_completed")
         val STORAGE_ACCESS_MODE = stringPreferencesKey("key_storage_access_mode")
         val SELECTED_FOLDER_URIS = stringSetPreferencesKey("key_selected_folder_uris")
+        val EXCLUDED_FOLDER_PATHS = stringSetPreferencesKey("key_library_excluded_folders")
     }
 
     override val storageAccessState: Flow<StorageAccessState> = dataStore.data
@@ -45,13 +46,15 @@ class StorageAccessRepositoryImpl @Inject constructor(
                 StorageAccessMode.ALL_MEDIA
             }
             val folders = preferences[PreferencesKeys.SELECTED_FOLDER_URIS] ?: emptySet()
+            val excluded = preferences[PreferencesKeys.EXCLUDED_FOLDER_PATHS] ?: emptySet()
             val permissionGranted = isPermissionGranted()
 
             StorageAccessState(
                 isOnboardingCompleted = isCompleted,
                 isPermissionGranted = permissionGranted,
                 accessMode = accessMode,
-                selectedFolderUris = folders
+                selectedFolderUris = folders,
+                excludedFolderPaths = excluded
             )
         }
 
@@ -90,6 +93,26 @@ class StorageAccessRepositoryImpl @Inject constructor(
         dataStore.edit { preferences ->
             preferences.remove(PreferencesKeys.SELECTED_FOLDER_URIS)
             preferences[PreferencesKeys.STORAGE_ACCESS_MODE] = StorageAccessMode.ALL_MEDIA.name
+        }
+    }
+
+    override suspend fun addExcludedFolder(folderPath: String) {
+        dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.EXCLUDED_FOLDER_PATHS] ?: emptySet()
+            preferences[PreferencesKeys.EXCLUDED_FOLDER_PATHS] = current + folderPath
+        }
+    }
+
+    override suspend fun removeExcludedFolder(folderPath: String) {
+        dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.EXCLUDED_FOLDER_PATHS] ?: emptySet()
+            preferences[PreferencesKeys.EXCLUDED_FOLDER_PATHS] = current - folderPath
+        }
+    }
+
+    override suspend fun clearExcludedFolders() {
+        dataStore.edit { preferences ->
+            preferences.remove(PreferencesKeys.EXCLUDED_FOLDER_PATHS)
         }
     }
 

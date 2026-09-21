@@ -55,7 +55,8 @@ abstract class DatabaseModule {
             )
                 .addMigrations(
                     NexusDatabase.MIGRATION_1_2,
-                    NexusDatabase.MIGRATION_2_3
+                    NexusDatabase.MIGRATION_2_3,
+                    NexusDatabase.MIGRATION_3_4
                 )
                 .build()
         }

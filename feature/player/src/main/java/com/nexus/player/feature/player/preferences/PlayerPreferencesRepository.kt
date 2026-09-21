@@ -9,15 +9,19 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
+import com.nexus.player.core.common.settings.model.EqualizerPreset
+import com.nexus.player.core.common.settings.model.parseBandLevels
+import com.nexus.player.core.common.settings.model.serializeBandLevels
 import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.core.playback.model.ExternalSubtitle
+import com.nexus.player.core.playback.queue.RepeatMode
 import com.nexus.player.core.playback.model.SubtitleAppearance
 import com.nexus.player.core.playback.model.SubtitleBackgroundStyle
 import com.nexus.player.core.playback.model.SubtitlePosition
 import com.nexus.player.core.playback.model.SubtitleTextColor
 import com.nexus.player.core.playback.model.SubtitleTextSize
 import com.nexus.player.core.playback.model.VideoScaleMode
-import com.nexus.player.core.playback.queue.RepeatMode
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -41,6 +45,7 @@ interface PlayerPreferencesRepository {
     val preferredAudioLanguage: Flow<String?>
     val preferredSubtitleLanguage: Flow<String?>
     val areSubtitlesEnabled: Flow<Boolean>
+    val defaultSubtitleTrackBehavior: Flow<DefaultSubtitleTrackBehavior>
     val audioDelayMs: Flow<Long>
     val subtitleDelayMs: Flow<Long>
     val subtitleAppearance: Flow<SubtitleAppearance>
@@ -51,6 +56,8 @@ interface PlayerPreferencesRepository {
     val equalizerPreset: Flow<String>
     val repeatMode: Flow<RepeatMode>
     val isShuffleEnabled: Flow<Boolean>
+    val customBandLevels: Flow<Map<Int, Int>>
+    val rememberPerVideoAudioSettings: Flow<Boolean>
 
     suspend fun setPlaybackSpeed(speed: Float)
     suspend fun setResizeMode(mode: Int)
@@ -58,6 +65,7 @@ interface PlayerPreferencesRepository {
     suspend fun setPreferredAudioLanguage(language: String?)
     suspend fun setPreferredSubtitleLanguage(language: String?)
     suspend fun setSubtitlesEnabled(enabled: Boolean)
+    suspend fun setDefaultSubtitleTrackBehavior(behavior: DefaultSubtitleTrackBehavior)
     suspend fun setAudioDelayMs(delayMs: Long)
     suspend fun setSubtitleDelayMs(delayMs: Long)
     suspend fun setSubtitleAppearance(appearance: SubtitleAppearance)
@@ -66,6 +74,9 @@ interface PlayerPreferencesRepository {
     suspend fun setAudioBoost(percent: Int)
     suspend fun setEqualizerEnabled(enabled: Boolean)
     suspend fun setEqualizerPreset(preset: String)
+    suspend fun setCustomBandLevels(levels: Map<Int, Int>)
+    suspend fun setCustomBandLevel(bandIndex: Int, levelmB: Int)
+    suspend fun setRememberPerVideoAudioSettings(remember: Boolean)
     suspend fun setRepeatMode(mode: RepeatMode)
     suspend fun setShuffleEnabled(enabled: Boolean)
 
@@ -74,6 +85,9 @@ interface PlayerPreferencesRepository {
 
     fun getVideoScaleMode(videoId: String): Flow<VideoScaleMode>
     suspend fun setVideoScaleMode(videoId: String, mode: VideoScaleMode)
+
+    fun getVideoAudioDelayMs(videoId: String): Flow<Long?>
+    suspend fun setVideoAudioDelayMs(videoId: String, delayMs: Long?)
 }
 
 @Singleton
@@ -93,12 +107,16 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         val SUBTITLE_TEXT_SIZE = stringPreferencesKey("key_player_sub_text_size")
         val SUBTITLE_TEXT_COLOR = stringPreferencesKey("key_player_sub_text_color")
         val SUBTITLE_BG_STYLE = stringPreferencesKey("key_player_sub_bg_style")
+        val SUBTITLE_BG_OPACITY = floatPreferencesKey("key_player_sub_bg_opacity")
         val SUBTITLE_POSITION = stringPreferencesKey("key_player_sub_position")
+        val SUBTITLE_TRACK_BEHAVIOR = stringPreferencesKey("key_player_sub_track_behavior")
         val SEEK_DURATION_SECONDS = intPreferencesKey("key_player_seek_duration_seconds")
         val AUTO_NEXT_ENABLED = booleanPreferencesKey("key_player_auto_next_enabled")
         val AUDIO_BOOST = intPreferencesKey("key_player_audio_boost")
         val EQUALIZER_ENABLED = booleanPreferencesKey("key_player_equalizer_enabled")
         val EQUALIZER_PRESET = stringPreferencesKey("key_player_equalizer_preset")
+        val CUSTOM_BAND_LEVELS = stringPreferencesKey("key_player_custom_band_levels")
+        val REMEMBER_PER_VIDEO_AUDIO = booleanPreferencesKey("key_player_remember_per_video_audio")
         val REPEAT_MODE = stringPreferencesKey("key_player_repeat_mode")
         val SHUFFLE_ENABLED = booleanPreferencesKey("key_player_shuffle_enabled")
     }
@@ -157,6 +175,16 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
             prefs[PreferencesKeys.SHUFFLE_ENABLED] ?: false
         }
 
+    override val customBandLevels: Flow<Map<Int, Int>> = safePreferences
+        .map { prefs ->
+            parseBandLevels(prefs[PreferencesKeys.CUSTOM_BAND_LEVELS])
+        }
+
+    override val rememberPerVideoAudioSettings: Flow<Boolean> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.REMEMBER_PER_VIDEO_AUDIO] ?: false
+        }
+
     override val resizeMode: Flow<Int> = safePreferences
         .map { prefs ->
             prefs[PreferencesKeys.RESIZE_MODE] ?: 0 // RESIZE_MODE_FIT
@@ -197,12 +225,18 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
             prefs[PreferencesKeys.SUBTITLE_DELAY_MS] ?: 0L
         }
 
+    override val defaultSubtitleTrackBehavior: Flow<DefaultSubtitleTrackBehavior> = safePreferences
+        .map { prefs ->
+            DefaultSubtitleTrackBehavior.fromName(prefs[PreferencesKeys.SUBTITLE_TRACK_BEHAVIOR])
+        }
+
     override val subtitleAppearance: Flow<SubtitleAppearance> = safePreferences
         .map { prefs ->
             SubtitleAppearance(
                 textSize = SubtitleTextSize.fromName(prefs[PreferencesKeys.SUBTITLE_TEXT_SIZE]),
                 textColor = SubtitleTextColor.fromName(prefs[PreferencesKeys.SUBTITLE_TEXT_COLOR]),
                 backgroundStyle = SubtitleBackgroundStyle.fromName(prefs[PreferencesKeys.SUBTITLE_BG_STYLE]),
+                backgroundOpacity = (prefs[PreferencesKeys.SUBTITLE_BG_OPACITY] ?: 0.75f).coerceIn(0f, 1f),
                 position = SubtitlePosition.fromName(prefs[PreferencesKeys.SUBTITLE_POSITION])
             )
         }
@@ -263,11 +297,18 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setDefaultSubtitleTrackBehavior(behavior: DefaultSubtitleTrackBehavior) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.SUBTITLE_TRACK_BEHAVIOR] = behavior.name
+        }
+    }
+
     override suspend fun setSubtitleAppearance(appearance: SubtitleAppearance) {
         dataStore.edit { prefs ->
             prefs[PreferencesKeys.SUBTITLE_TEXT_SIZE] = appearance.textSize.name
             prefs[PreferencesKeys.SUBTITLE_TEXT_COLOR] = appearance.textColor.name
             prefs[PreferencesKeys.SUBTITLE_BG_STYLE] = appearance.backgroundStyle.name
+            prefs[PreferencesKeys.SUBTITLE_BG_OPACITY] = appearance.backgroundOpacity.coerceIn(0f, 1f)
             prefs[PreferencesKeys.SUBTITLE_POSITION] = appearance.position.name
         }
     }
@@ -299,6 +340,42 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override suspend fun setEqualizerPreset(preset: String) {
         dataStore.edit { prefs ->
             prefs[PreferencesKeys.EQUALIZER_PRESET] = preset
+        }
+    }
+
+    override suspend fun setCustomBandLevels(levels: Map<Int, Int>) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.CUSTOM_BAND_LEVELS] = serializeBandLevels(levels)
+            prefs[PreferencesKeys.EQUALIZER_PRESET] = "Custom"
+        }
+    }
+
+    override suspend fun setCustomBandLevel(bandIndex: Int, levelmB: Int) {
+        dataStore.edit { prefs ->
+            val currentLevels = parseBandLevels(prefs[PreferencesKeys.CUSTOM_BAND_LEVELS]).toMutableMap()
+            currentLevels[bandIndex] = levelmB.coerceIn(EqualizerPreset.MIN_BAND_LEVEL_MB, EqualizerPreset.MAX_BAND_LEVEL_MB)
+            prefs[PreferencesKeys.CUSTOM_BAND_LEVELS] = serializeBandLevels(currentLevels)
+            prefs[PreferencesKeys.EQUALIZER_PRESET] = "Custom"
+        }
+    }
+
+    override suspend fun setRememberPerVideoAudioSettings(remember: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.REMEMBER_PER_VIDEO_AUDIO] = remember
+        }
+    }
+
+    override fun getVideoAudioDelayMs(videoId: String): Flow<Long?> = safePreferences
+        .map { prefs -> prefs[longPreferencesKey("key_audio_delay_$videoId")] }
+
+    override suspend fun setVideoAudioDelayMs(videoId: String, delayMs: Long?) {
+        dataStore.edit { prefs ->
+            val key = longPreferencesKey("key_audio_delay_$videoId")
+            if (delayMs != null) {
+                prefs[key] = delayMs
+            } else {
+                prefs.remove(key)
+            }
         }
     }
 

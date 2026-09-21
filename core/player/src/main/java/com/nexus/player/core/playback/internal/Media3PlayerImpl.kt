@@ -19,6 +19,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -216,6 +217,7 @@ internal class Media3PlayerImpl @Inject constructor(
                             val language = format.language
                             val mimeType = format.sampleMimeType
                             val isExternal = currentExternalSubtitles.any { it.label == label || it.uri.endsWith(label) }
+                            val isForced = (format.selectionFlags and C.SELECTION_FLAG_FORCED) != 0
 
                             subtitleList.add(
                                 com.nexus.player.core.playback.model.PlayerTrack(
@@ -224,7 +226,8 @@ internal class Media3PlayerImpl @Inject constructor(
                                     language = language,
                                     isSelected = isSelected,
                                     mimeType = mimeType,
-                                    isExternal = isExternal
+                                    isExternal = isExternal,
+                                    isForced = isForced
                                 )
                             )
                         }
@@ -323,6 +326,7 @@ internal class Media3PlayerImpl @Inject constructor(
     override fun seekTo(positionMs: Long) {
         if (released) return
         val player = exoPlayer ?: return
+        if (!player.isCurrentMediaItemSeekable) return
         val duration = player.duration.coerceAtLeast(0L)
         val clampedPosition = if (duration > 0L) {
             positionMs.coerceIn(0L, duration)
@@ -375,6 +379,9 @@ internal class Media3PlayerImpl @Inject constructor(
 
     @OptIn(UnstableApi::class)
     override fun attachPlayerView(playerView: PlayerView) {
+        if (attachedPlayerView === playerView && playerView.player === exoPlayer) {
+            return
+        }
         attachedPlayerView = playerView
         playerView.useController = false
         playerView.resizeMode = currentResizeMode
@@ -540,8 +547,9 @@ internal class Media3PlayerImpl @Inject constructor(
             SubtitleBackgroundStyle.Box -> CaptionStyleCompat.EDGE_TYPE_NONE
         }
 
+        val bgAlpha = (appearance.backgroundOpacity.coerceIn(0f, 1f) * 255).toInt()
         val backgroundColor = when (appearance.backgroundStyle) {
-            SubtitleBackgroundStyle.Box -> 0xB3000000.toInt()
+            SubtitleBackgroundStyle.Box -> (bgAlpha shl 24)
             else -> 0x00000000
         }
 
@@ -652,7 +660,14 @@ internal class Media3PlayerImpl @Inject constructor(
      */
     @OptIn(UnstableApi::class)
     private fun buildPlayer(): ExoPlayer {
-        val dataSourceFactory = DefaultDataSource.Factory(context)
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(20_000)
+            .setUserAgent("NexusPlayer/1.0.0 (Android; Media3)")
+            .setAllowCrossProtocolRedirects(true)
+            .setKeepPostFor302Redirects(true)
+
+        val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         // Future: Branch on currentDecoderMode to supply a custom RenderersFactory

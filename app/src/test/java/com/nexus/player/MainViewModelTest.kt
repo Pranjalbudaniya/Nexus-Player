@@ -159,6 +159,8 @@ private class FakeScanOrchestrator : MediaScanOrchestrator {
     }
 
     override fun triggerManualScan(): Boolean = true
+    override fun triggerIncrementalScan(): Boolean = true
+    override fun triggerLocationScan(locationUriOrPath: String): Boolean = true
     override fun cancelScan() {}
 }
 

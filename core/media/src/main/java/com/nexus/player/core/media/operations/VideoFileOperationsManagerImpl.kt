@@ -13,6 +13,8 @@ import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.model.toMediaMetadata
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -43,10 +45,19 @@ class VideoFileOperationsManagerImpl @Inject constructor(
         private val INVALID_CHARS_REGEX = Regex("[\\\\/:*?\"<>|]")
         private const val BUFFER_SIZE = 64 * 1024
         private const val STAGING_EXPIRATION_MS = 60_000L // 1 minute
+
+        private fun isNetworkVideo(videoId: String): Boolean {
+            return videoId.startsWith("http://", ignoreCase = true) || videoId.startsWith("https://", ignoreCase = true)
+        }
     }
 
     override suspend fun renameVideo(videoId: String, newName: String): Result<MediaMetadata> =
         withContext(ioDispatcher) {
+            if (isNetworkVideo(videoId)) {
+                return@withContext Result.failure(
+                    UnsupportedOperationException("File operations are not supported for network streams.")
+                )
+            }
             val cleanName = newName.trim()
             if (cleanName.isBlank()) {
                 return@withContext Result.failure(IllegalArgumentException("Filename cannot be blank."))
@@ -109,6 +120,11 @@ class VideoFileOperationsManagerImpl @Inject constructor(
 
     override suspend fun moveVideo(videoId: String, targetDirectoryPath: String): Result<MediaMetadata> =
         withContext(ioDispatcher) {
+            if (isNetworkVideo(videoId)) {
+                return@withContext Result.failure(
+                    UnsupportedOperationException("File operations are not supported for network streams.")
+                )
+            }
             val targetDir = File(targetDirectoryPath)
             if (!targetDir.exists() && !targetDir.mkdirs()) {
                 return@withContext Result.failure(IOException("Could not create target directory: $targetDirectoryPath"))
@@ -143,11 +159,7 @@ class VideoFileOperationsManagerImpl @Inject constructor(
             var moved = sourceFile.renameTo(destFile)
             if (!moved) {
                 try {
-                    sourceFile.inputStream().buffered().use { input ->
-                        destFile.outputStream().buffered().use { output ->
-                            input.copyTo(output, bufferSize = BUFFER_SIZE)
-                        }
-                    }
+                    copyStreamCancellable(sourceFile, destFile)
                     if (destFile.length() == sourceFile.length()) {
                         sourceFile.delete()
                         moved = true
@@ -174,6 +186,11 @@ class VideoFileOperationsManagerImpl @Inject constructor(
 
     override suspend fun copyVideo(videoId: String, targetDirectoryPath: String): Result<MediaMetadata> =
         withContext(ioDispatcher) {
+            if (isNetworkVideo(videoId)) {
+                return@withContext Result.failure(
+                    UnsupportedOperationException("File operations are not supported for network streams.")
+                )
+            }
             val targetDir = File(targetDirectoryPath)
             if (!targetDir.exists() && !targetDir.mkdirs()) {
                 return@withContext Result.failure(IOException("Could not create target directory: $targetDirectoryPath"))
@@ -208,11 +225,7 @@ class VideoFileOperationsManagerImpl @Inject constructor(
             }
 
             try {
-                sourceFile.inputStream().buffered().use { input ->
-                    destFile.outputStream().buffered().use { output ->
-                        input.copyTo(output, bufferSize = BUFFER_SIZE)
-                    }
-                }
+                copyStreamCancellable(sourceFile, destFile)
             } catch (e: Exception) {
                 destFile.delete()
                 return@withContext Result.failure(e)
@@ -242,6 +255,11 @@ class VideoFileOperationsManagerImpl @Inject constructor(
 
     override suspend fun deleteVideo(videoId: String, stageForUndo: Boolean): Result<Unit> =
         withContext(ioDispatcher) {
+            if (isNetworkVideo(videoId)) {
+                return@withContext Result.failure(
+                    UnsupportedOperationException("File operations are not supported for network streams.")
+                )
+            }
             val video = videoRepository.getVideoById(videoId)
             if (video == null) {
                 // Record already removed from database
@@ -259,11 +277,7 @@ class VideoFileOperationsManagerImpl @Inject constructor(
                         val moved = file.renameTo(stagedFile)
                         if (!moved) {
                             try {
-                                file.inputStream().buffered().use { input ->
-                                    stagedFile.outputStream().buffered().use { output ->
-                                        input.copyTo(output, bufferSize = BUFFER_SIZE)
-                                    }
-                                }
+                                copyStreamCancellable(file, stagedFile)
                                 file.delete()
                             } catch (e: Exception) {
                                 // Fallback: delete directly if staging fails
@@ -374,6 +388,21 @@ class VideoFileOperationsManagerImpl @Inject constructor(
     ) {
         if (folderPath.isNotBlank()) {
             onNavigateInApp(folderPath, folderName)
+        }
+    }
+
+    private suspend fun copyStreamCancellable(source: File, destination: File) {
+        source.inputStream().buffered(BUFFER_SIZE).use { input ->
+            destination.outputStream().buffered(BUFFER_SIZE).use { output ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytes = input.read(buffer)
+                while (bytes >= 0) {
+                    currentCoroutineContext().ensureActive()
+                    output.write(buffer, 0, bytes)
+                    bytes = input.read(buffer)
+                }
+                output.flush()
+            }
         }
     }
 }

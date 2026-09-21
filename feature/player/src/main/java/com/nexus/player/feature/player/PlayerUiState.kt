@@ -59,6 +59,10 @@ sealed interface PlayerUiState {
         val canGoPrevious: Boolean
             get() = hasPrevious || currentPositionMs > 3000L
 
+        val isNetworkMedia: Boolean
+            get() = videoId.startsWith("http://", ignoreCase = true) ||
+                    videoId.startsWith("https://", ignoreCase = true)
+
         val isBuffering: Boolean
             get() = playbackStatus == PlaybackStatus.Buffering
 

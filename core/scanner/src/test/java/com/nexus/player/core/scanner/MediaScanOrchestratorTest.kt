@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nexus.player.core.common.storage.StorageAccessMode
 import com.nexus.player.core.common.storage.StorageAccessState
+import com.nexus.player.core.common.settings.model.NexusSettings
 import com.nexus.player.core.database.model.Video
 import com.nexus.player.core.scanner.extractor.VideoMetadataExtractor
 import com.nexus.player.core.scanner.model.ScanResult
@@ -322,6 +323,78 @@ class MediaScanOrchestratorTest {
         assertEquals(110, fakeVideoRepository.getVideosCount())
         assertEquals(listOf(50, 50, 10), fakeVideoRepository.upsertBatchSizes)
     }
+
+    @Test
+    fun startupScanSkippedWhenDisabledInSettings() = runTest {
+        val standardDispatcher = StandardTestDispatcher(testScheduler)
+        val controlledScanner = ControllableMediaScanner()
+        val fakeSettings = FakeOrchestratorSettingsRepository(
+            NexusSettings(
+                library = com.nexus.player.core.common.settings.model.LibrarySettings(
+                    scanOnAppLaunch = false
+                )
+            )
+        )
+        val customOrchestrator = MediaScanOrchestratorImpl(
+            storageAccessRepository = fakeStorageRepository,
+            mediaScanner = controlledScanner,
+            applicationScope = CoroutineScope(standardDispatcher),
+            ioDispatcher = standardDispatcher,
+            settingsRepository = fakeSettings
+        )
+
+        val triggered = customOrchestrator.triggerStartupScan()
+        assertTrue(triggered)
+        testScheduler.advanceUntilIdle()
+
+        assertNull("Media scanner should not be called when scanOnAppLaunch is false", controlledScanner.lastScanOptions)
+        assertEquals(ScanState.Idle, controlledScanner.scanState.value)
+    }
+
+    @Test
+    fun incrementalScanPassesIncrementalOption() = runTest {
+        val standardDispatcher = StandardTestDispatcher(testScheduler)
+        val controlledScanner = ControllableMediaScanner()
+        val customOrchestrator = MediaScanOrchestratorImpl(
+            storageAccessRepository = fakeStorageRepository,
+            mediaScanner = controlledScanner,
+            applicationScope = CoroutineScope(standardDispatcher),
+            ioDispatcher = standardDispatcher
+        )
+
+        val triggered = customOrchestrator.triggerIncrementalScan()
+        assertTrue(triggered)
+        testScheduler.runCurrent()
+
+        assertNotNull(controlledScanner.lastScanOptions)
+        assertTrue(controlledScanner.lastScanOptions?.isIncremental == true)
+
+        controlledScanner.complete()
+        testScheduler.advanceUntilIdle()
+    }
+
+    @Test
+    fun locationScanPassesTargetLocationOption() = runTest {
+        val standardDispatcher = StandardTestDispatcher(testScheduler)
+        val controlledScanner = ControllableMediaScanner()
+        val customOrchestrator = MediaScanOrchestratorImpl(
+            storageAccessRepository = fakeStorageRepository,
+            mediaScanner = controlledScanner,
+            applicationScope = CoroutineScope(standardDispatcher),
+            ioDispatcher = standardDispatcher
+        )
+
+        val targetPath = "/storage/Movies/Action"
+        val triggered = customOrchestrator.triggerLocationScan(targetPath)
+        assertTrue(triggered)
+        testScheduler.runCurrent()
+
+        assertNotNull(controlledScanner.lastScanOptions)
+        assertEquals(targetPath, controlledScanner.lastScanOptions?.targetFolderUriOrPath)
+
+        controlledScanner.complete()
+        testScheduler.advanceUntilIdle()
+    }
 }
 
 // --- Controllable and Failing Scanner Fakes for Orchestrator Tests ---
@@ -331,8 +404,10 @@ class ControllableMediaScanner : MediaScanner {
     override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
     private var completionDeferred = CompletableDeferred<Unit>()
+    var lastScanOptions: com.nexus.player.core.scanner.model.ScanOptions? = null
 
-    override suspend fun startScan(): ScanResult {
+    override suspend fun startScan(options: com.nexus.player.core.scanner.model.ScanOptions): ScanResult {
+        lastScanOptions = options
         _scanState.value = ScanState.Scanning()
         completionDeferred.await()
         val result = ScanResult(0, 0, 0, 0, 10L)
@@ -356,7 +431,7 @@ class FailingMediaScanner : MediaScanner {
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
-    override suspend fun startScan(): ScanResult {
+    override suspend fun startScan(options: com.nexus.player.core.scanner.model.ScanOptions): ScanResult {
         _scanState.value = ScanState.Scanning()
         val error = RuntimeException("Disk unreadable")
         _scanState.value = ScanState.Error("Media scan failed", error)
@@ -366,4 +441,11 @@ class FailingMediaScanner : MediaScanner {
     override fun cancelScan() {
         _scanState.value = ScanState.Cancelled
     }
+}
+
+class FakeOrchestratorSettingsRepository(
+    initialSettings: com.nexus.player.core.common.settings.model.NexusSettings = com.nexus.player.core.common.settings.model.NexusSettings()
+) : com.nexus.player.core.common.settings.SettingsRepository {
+    private val _settings = MutableStateFlow(initialSettings)
+    override val settings: StateFlow<com.nexus.player.core.common.settings.model.NexusSettings> = _settings.asStateFlow()
 }

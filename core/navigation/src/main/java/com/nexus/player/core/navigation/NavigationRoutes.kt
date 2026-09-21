@@ -66,6 +66,12 @@ data object SearchRoute : NexusRoute
 data object SettingsRoute : NexusRoute
 
 /**
+ * Storage and scan locations management destination.
+ */
+@Serializable
+data object StorageLocationsRoute : NexusRoute
+
+/**
  * Playlist detail view destination.
  */
 @Serializable

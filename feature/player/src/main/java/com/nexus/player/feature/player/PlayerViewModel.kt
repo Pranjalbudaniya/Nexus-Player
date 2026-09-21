@@ -5,10 +5,12 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nexus.player.core.common.network.ApplicationScope
 import com.nexus.player.core.common.network.Dispatcher
 import com.nexus.player.core.common.network.NexusDispatchers
 import com.nexus.player.core.database.model.Video
 import com.nexus.player.core.database.repository.VideoRepository
+import com.nexus.player.core.common.settings.model.DefaultSubtitleTrackBehavior
 import com.nexus.player.core.playback.NexusPlayer
 import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.core.playback.model.ErrorCategory
@@ -29,6 +31,7 @@ import com.nexus.player.feature.player.screenshot.ScreenshotManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -84,7 +87,8 @@ class PlayerViewModel internal constructor(
     private val ioDispatcher: CoroutineDispatcher,
     @ApplicationContext private val appContext: Context? = null,
     val playbackQueueManager: PlaybackQueueManager = PlaybackQueueManagerImpl(),
-    internal var timeProvider: () -> Long
+    internal var timeProvider: () -> Long,
+    private val externalScope: CoroutineScope? = null
 ) : ViewModel() {
 
     @Inject
@@ -96,7 +100,8 @@ class PlayerViewModel internal constructor(
         subtitleRepository: SubtitleRepository,
         playbackQueueManager: PlaybackQueueManager,
         @Dispatcher(NexusDispatchers.IO) ioDispatcher: CoroutineDispatcher,
-        @ApplicationContext appContext: Context
+        @ApplicationContext appContext: Context,
+        @ApplicationScope applicationScope: CoroutineScope
     ) : this(
         savedStateHandle = savedStateHandle,
         videoRepository = videoRepository,
@@ -106,19 +111,52 @@ class PlayerViewModel internal constructor(
         ioDispatcher = ioDispatcher,
         appContext = appContext,
         playbackQueueManager = playbackQueueManager,
-        timeProvider = { System.currentTimeMillis() }
+        timeProvider = { System.currentTimeMillis() },
+        externalScope = applicationScope
     )
 
     companion object {
         const val PROGRESS_DEBOUNCE_MS = 3000L
         const val CONTROLS_AUTO_HIDE_MS = 3000L
         const val COMPLETION_THRESHOLD = 0.95f
+
+        fun sanitizeMediaId(rawId: String): String {
+            return if (rawId.startsWith("http%3A", ignoreCase = true) || rawId.startsWith("https%3A", ignoreCase = true)) {
+                try {
+                    java.net.URLDecoder.decode(rawId, "UTF-8")
+                } catch (_: Exception) {
+                    rawId
+                }
+            } else {
+                rawId
+            }
+        }
+
+        fun cleanNetworkTitle(url: String): String {
+            return try {
+                val uri = java.net.URI(url)
+                val path = uri.path
+                val lastSegment = path?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                if (lastSegment != null) {
+                    java.net.URLDecoder.decode(lastSegment, "UTF-8")
+                } else {
+                    uri.host?.takeIf { it.isNotBlank() } ?: "Network Stream"
+                }
+            } catch (_: Exception) {
+                val pathOnly = url.substringBefore('?').substringBefore('#')
+                val lastPart = pathOnly.substringAfterLast('/').takeIf { it.isNotBlank() }
+                lastPart ?: "Network Stream"
+            }
+        }
     }
 
     private val videoIdFromNav: String? = savedStateHandle["videoId"]
 
     private val _video = MutableStateFlow<Video?>(null)
     val video: StateFlow<Video?> = _video.asStateFlow()
+
+    private val _networkTitle = MutableStateFlow<String?>(null)
+    internal val sessionPositions = mutableMapOf<String, Long>()
 
     private val _controlsVisible = MutableStateFlow(true)
     private val _customError = MutableStateFlow<PlayerUiState.Error?>(null)
@@ -297,6 +335,7 @@ class PlayerViewModel internal constructor(
                 val error = playerState.error!!
                 val canRetry = error.category in setOf(
                     ErrorCategory.NetworkFailure,
+                    ErrorCategory.InvalidUrl,
                     ErrorCategory.DecoderInitFailure,
                     ErrorCategory.Unknown
                 )
@@ -308,13 +347,13 @@ class PlayerViewModel internal constructor(
                 )
             }
             playerState.playbackState == PlaybackStatus.Loading && video == null -> {
-                PlayerUiState.Loading(videoTitle = null)
+                PlayerUiState.Loading(videoTitle = _networkTitle.value)
             }
             playerState.playbackState == PlaybackStatus.Loading && video != null -> {
                 PlayerUiState.Loading(videoTitle = video.title)
             }
             else -> {
-                val title = video?.title ?: playerState.currentMediaId ?: "Video"
+                val title = video?.title ?: _networkTitle.value ?: cleanNetworkTitle(playerState.currentMediaId ?: "Video")
                 val resolvedDuration = if (playerState.duration > 0L) {
                     playerState.duration
                 } else {
@@ -364,16 +403,13 @@ class PlayerViewModel internal constructor(
     )
 
     init {
-        videoIdFromNav?.let { id ->
+        videoIdFromNav?.let { rawId ->
+            val id = sanitizeMediaId(rawId)
             if (playbackQueueManager.queueState.value.isEmpty ||
                 playbackQueueManager.queueState.value.currentVideoId != id
             ) {
-                val found = playbackQueueManager.playItem(id)
-                if (!found) {
-                    playbackQueueManager.setQueue(listOf(id), id, QueueSource.Manual)
-                }
+                loadMedia(id)
             }
-            loadMedia(id)
         }
         observePlaybackPositionForPersistence()
         observeTrackPreferences()
@@ -400,39 +436,46 @@ class PlayerViewModel internal constructor(
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.audioDelayMs.first().let { delay ->
+            playerPreferencesRepository.audioDelayMs.collect { delay ->
                 player.setAudioDelayMs(delay)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.subtitleDelayMs.first().let { delay ->
+            playerPreferencesRepository.subtitleDelayMs.collect { delay ->
                 player.setSubtitleDelayMs(delay)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.subtitleAppearance.first().let { appearance ->
+            playerPreferencesRepository.subtitleAppearance.collect { appearance ->
                 player.setSubtitleAppearance(appearance)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.areSubtitlesEnabled.first().let { enabled ->
+            playerPreferencesRepository.areSubtitlesEnabled.collect { enabled ->
                 player.setSubtitlesEnabled(enabled)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.audioBoostPercent.first().let { boost ->
+            playerPreferencesRepository.audioBoostPercent.collect { boost ->
                 player.audioEffectsController.setAudioBoost(boost)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.isEqualizerEnabled.first().let { enabled ->
+            playerPreferencesRepository.isEqualizerEnabled.collect { enabled ->
                 player.audioEffectsController.setEqualizerEnabled(enabled)
             }
         }
         viewModelScope.launch {
-            playerPreferencesRepository.equalizerPreset.first().let { preset ->
-                player.audioEffectsController.setEqualizerPreset(preset)
-            }
+            combine(
+                playerPreferencesRepository.equalizerPreset,
+                playerPreferencesRepository.customBandLevels
+            ) { preset, customBands ->
+                if (preset.equals("Custom", ignoreCase = true)) {
+                    player.audioEffectsController.setBandLevels(customBands)
+                } else {
+                    player.audioEffectsController.setEqualizerPreset(preset)
+                }
+            }.collect()
         }
         viewModelScope.launch {
             playerPreferencesRepository.repeatMode.collect { mode ->
@@ -474,18 +517,52 @@ class PlayerViewModel internal constructor(
             combine(
                 player.state.map { it.subtitleTracks }.distinctUntilChanged(),
                 playerPreferencesRepository.preferredSubtitleLanguage,
-                playerPreferencesRepository.areSubtitlesEnabled
-            ) { tracks, preferredLang, enabled ->
-                if (!enabled) {
+                playerPreferencesRepository.areSubtitlesEnabled,
+                playerPreferencesRepository.defaultSubtitleTrackBehavior
+            ) { tracks, preferredLang, enabled, behavior ->
+                if (!enabled || behavior == DefaultSubtitleTrackBehavior.OFF) {
                     player.setSubtitlesEnabled(false)
-                } else if (tracks.isNotEmpty() && preferredLang != null) {
-                    val matchingTrack = tracks.firstOrNull {
-                        it.language.equals(preferredLang, ignoreCase = true) ||
-                            it.resolvedLanguageName.equals(preferredLang, ignoreCase = true) ||
-                            it.label.equals(preferredLang, ignoreCase = true)
-                    }
-                    if (matchingTrack != null && !matchingTrack.isSelected) {
-                        player.selectSubtitleTrack(matchingTrack.id)
+                } else if (tracks.isNotEmpty()) {
+                    val alreadySelected = tracks.firstOrNull { it.isSelected }
+                    if (alreadySelected == null) {
+                        val matchingTrack = when (behavior) {
+                            DefaultSubtitleTrackBehavior.FORCED_ONLY -> {
+                                tracks.firstOrNull { it.isForced }
+                            }
+                            DefaultSubtitleTrackBehavior.FIRST_AVAILABLE -> {
+                                val langMatch = preferredLang?.let { lang ->
+                                    if (!lang.equals("Auto", ignoreCase = true)) {
+                                        tracks.firstOrNull {
+                                            it.language.equals(lang, ignoreCase = true) ||
+                                                it.resolvedLanguageName.equals(lang, ignoreCase = true) ||
+                                                it.label.equals(lang, ignoreCase = true)
+                                        }
+                                    } else null
+                                }
+                                langMatch ?: tracks.firstOrNull()
+                            }
+                            DefaultSubtitleTrackBehavior.AUTO, DefaultSubtitleTrackBehavior.OFF -> {
+                                if (preferredLang != null && !preferredLang.equals("Auto", ignoreCase = true)) {
+                                    tracks.firstOrNull {
+                                        it.language.equals(preferredLang, ignoreCase = true) ||
+                                            it.resolvedLanguageName.equals(preferredLang, ignoreCase = true) ||
+                                            it.label.equals(preferredLang, ignoreCase = true)
+                                    } ?: tracks.firstOrNull { it.isForced } ?: tracks.firstOrNull()
+                                } else {
+                                    val deviceLang = java.util.Locale.getDefault().language
+                                    tracks.firstOrNull {
+                                        it.language.equals(deviceLang, ignoreCase = true) ||
+                                            it.resolvedLanguageName.equals(deviceLang, ignoreCase = true)
+                                    } ?: tracks.firstOrNull { it.isForced } ?: tracks.firstOrNull()
+                                }
+                            }
+                        }
+                        if (matchingTrack != null) {
+                            player.selectSubtitleTrack(matchingTrack.id)
+                            player.setSubtitlesEnabled(true)
+                        }
+                    } else {
+                        player.setSubtitlesEnabled(true)
                     }
                 }
             }.collect()
@@ -493,28 +570,78 @@ class PlayerViewModel internal constructor(
     }
 
     fun loadMedia(id: String) {
-        currentLoadedId = id
-        playbackQueueManager.playItem(id)
+        val sanitizedId = sanitizeMediaId(id)
+        currentLoadedId = sanitizedId
+        playbackQueueManager.playItem(sanitizedId)
         _customError.value = null
+        _video.value = null
         hasMarkedCompletedForSession = false
         hasHandledEndedForSession = false
         lastPersistWallTimeMs = timeProvider()
         resetZoom()
+
+        val isHttpNetwork = sanitizedId.startsWith("http://", ignoreCase = true) ||
+            sanitizedId.startsWith("https://", ignoreCase = true)
+        val isLocalUri = sanitizedId.startsWith("content://", ignoreCase = true) ||
+            sanitizedId.startsWith("file://", ignoreCase = true)
+
+        if (sanitizedId.contains("://") && !isHttpNetwork && !isLocalUri) {
+            val safeUrl = sanitizedId.substringBefore('?').substringBefore('#')
+            _customError.value = PlayerUiState.Error(
+                category = ErrorCategory.InvalidUrl,
+                userMessage = "Unsupported stream protocol. Only HTTP and HTTPS are supported.",
+                technicalDetail = "Rejected scheme for URL: $safeUrl",
+                canRetry = false
+            )
+            return
+        }
+
+        if (isHttpNetwork) {
+            val hasValidHost = try {
+                val uri = java.net.URI(sanitizedId)
+                !uri.host.isNullOrBlank()
+            } catch (_: Exception) {
+                false
+            }
+            if (!hasValidHost) {
+                _customError.value = PlayerUiState.Error(
+                    category = ErrorCategory.InvalidUrl,
+                    userMessage = "Invalid stream address format.",
+                    technicalDetail = "Address must include a valid host or domain name.",
+                    canRetry = false
+                )
+                return
+            }
+        }
+
         viewModelScope.launch {
-            val savedScaleMode = playerPreferencesRepository.getVideoScaleMode(id).first()
+            val savedScaleMode = playerPreferencesRepository.getVideoScaleMode(sanitizedId).first()
             player.setVideoScaleMode(savedScaleMode)
 
             val savedExternalSubs = withContext(ioDispatcher) {
-                playerPreferencesRepository.getExternalSubtitles(id).first()
+                playerPreferencesRepository.getExternalSubtitles(sanitizedId).first()
+            }
+
+            val rememberPerVideo = withContext(ioDispatcher) {
+                playerPreferencesRepository.rememberPerVideoAudioSettings.first()
+            }
+            if (rememberPerVideo) {
+                val perVideoDelay = withContext(ioDispatcher) {
+                    playerPreferencesRepository.getVideoAudioDelayMs(sanitizedId).first()
+                }
+                if (perVideoDelay != null) {
+                    player.setAudioDelayMs(perVideoDelay)
+                }
             }
 
             val video = withContext(ioDispatcher) {
-                videoRepository.getVideoById(id)
+                videoRepository.getVideoById(sanitizedId)
             }
 
             if (video != null) {
                 consecutiveSkipCount = 0
                 _video.value = video
+                _networkTitle.value = null
                 // Resume position rule: resume if not marked completed, <95% completed, has valid position, and not near the end
                 val isNearEnd = video.durationMs > 0L && (video.durationMs - video.playbackPositionMs) < 2000L
                 val isAlreadyCompleted = video.isCompleted || video.playbackPercentage >= COMPLETION_THRESHOLD || isNearEnd
@@ -547,40 +674,49 @@ class PlayerViewModel internal constructor(
                 player.prepare(mediaItem, startPosition)
                 player.play()
                 resetAutoHideTimer()
-            } else {
-                // Support direct media URIs passed to the player
-                val isUri = id.startsWith("content://") || id.startsWith("file://") ||
-                    id.startsWith("http://") || id.startsWith("https://")
-                if (isUri) {
-                    consecutiveSkipCount = 0
-                    val fallbackTitle = id.substringAfterLast('/')
-                    val mediaItem = NexusMediaItem(
-                        mediaId = id,
-                        uri = id,
-                        title = fallbackTitle,
-                        externalSubtitles = savedExternalSubs
-                    )
-                    player.prepare(mediaItem, 0L)
-                    player.play()
-                    resetAutoHideTimer()
+            } else if (isHttpNetwork || isLocalUri) {
+                consecutiveSkipCount = 0
+                _video.value = null
+                val cleanTitle = if (isHttpNetwork) {
+                    cleanNetworkTitle(sanitizedId)
                 } else {
-                    val queue = playbackQueueManager.queueState.value
-                    if (isAutoNextEnabled.value && queue.size > 1 && consecutiveSkipCount < queue.size) {
-                        consecutiveSkipCount++
-                        val nextId = playbackQueueManager.playNext()
-                        if (nextId != null && nextId != id) {
-                            loadMedia(nextId)
-                            return@launch
-                        }
-                    }
-                    consecutiveSkipCount = 0
-                    _customError.value = PlayerUiState.Error(
-                        category = ErrorCategory.MissingFile,
-                        userMessage = "Video file not found or inaccessible.",
-                        technicalDetail = "Video with ID '$id' was not found in the media library.",
-                        canRetry = false
-                    )
+                    sanitizedId.substringAfterLast('/')
                 }
+                _networkTitle.value = cleanTitle
+
+                val startPosition = if (isHttpNetwork) {
+                    sessionPositions[sanitizedId] ?: 0L
+                } else {
+                    0L
+                }
+
+                val mediaItem = NexusMediaItem(
+                    mediaId = sanitizedId,
+                    uri = sanitizedId,
+                    title = cleanTitle,
+                    externalSubtitles = savedExternalSubs
+                )
+                player.prepare(mediaItem, startPosition)
+                player.play()
+                resetAutoHideTimer()
+            } else {
+                val queue = playbackQueueManager.queueState.value
+                if (isAutoNextEnabled.value && queue.size > 1 && consecutiveSkipCount < queue.size) {
+                    consecutiveSkipCount++
+                    val nextId = playbackQueueManager.playNext()
+                    if (nextId != null && nextId != sanitizedId) {
+                        loadMedia(nextId)
+                        return@launch
+                    }
+                }
+                consecutiveSkipCount = 0
+                val safeId = sanitizedId.substringBefore('?').substringBefore('#')
+                _customError.value = PlayerUiState.Error(
+                    category = ErrorCategory.MissingFile,
+                    userMessage = "Video file not found or inaccessible.",
+                    technicalDetail = "Video with ID '$safeId' was not found in the media library.",
+                    canRetry = false
+                )
             }
         }
     }
@@ -816,7 +952,14 @@ class PlayerViewModel internal constructor(
     fun setAudioDelayMs(delayMs: Long) {
         player.setAudioDelayMs(delayMs)
         viewModelScope.launch {
-            playerPreferencesRepository.setAudioDelayMs(delayMs)
+            if (playerPreferencesRepository.rememberPerVideoAudioSettings.first()) {
+                val currentVidId = _video.value?.id
+                if (currentVidId != null) {
+                    playerPreferencesRepository.setVideoAudioDelayMs(currentVidId, delayMs)
+                }
+            } else {
+                playerPreferencesRepository.setAudioDelayMs(delayMs)
+            }
         }
     }
 
@@ -920,6 +1063,9 @@ class PlayerViewModel internal constructor(
 
     fun setEqualizerBandLevel(bandIndex: Int, levelmB: Int) {
         player.audioEffectsController.setBandLevel(bandIndex, levelmB)
+        viewModelScope.launch {
+            playerPreferencesRepository.setCustomBandLevel(bandIndex, levelmB)
+        }
     }
 
     fun setVolumePercent(percent: Int) {
@@ -984,6 +1130,7 @@ class PlayerViewModel internal constructor(
     }
 
     fun retry() {
+        _customError.value = null
         currentLoadedId?.let { loadMedia(it) }
     }
 
@@ -1008,7 +1155,37 @@ class PlayerViewModel internal constructor(
     private fun observePlaybackPositionForPersistence() {
         viewModelScope.launch {
             player.state.collect { state ->
-                val video = _video.value ?: return@collect
+                val currentId = currentLoadedId
+                val isNetworkMedia = currentId != null && (
+                    currentId.startsWith("http://", ignoreCase = true) ||
+                        currentId.startsWith("https://", ignoreCase = true)
+                )
+
+                if (isNetworkMedia) {
+                    val id = currentId ?: return@collect
+                    val duration = state.duration
+                    val position = state.currentPosition
+                    val percentage = if (duration > 0L) {
+                        (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                    val isCompleted = (duration > 0L && percentage >= COMPLETION_THRESHOLD) ||
+                        state.playbackState == PlaybackStatus.Ended
+                    if (isCompleted) {
+                        sessionPositions.remove(id)
+                    } else if (position > 0L) {
+                        sessionPositions[id] = position
+                    }
+                }
+
+                val video = _video.value ?: run {
+                    if (state.playbackState == PlaybackStatus.Ended && !hasHandledEndedForSession) {
+                        hasHandledEndedForSession = true
+                        handlePlaybackEnded()
+                    }
+                    return@collect
+                }
                 val duration = if (state.duration > 0L) state.duration else video.durationMs
                 if (duration <= 0L) return@collect
 
@@ -1091,6 +1268,31 @@ class PlayerViewModel internal constructor(
     }
 
     fun persistCurrentProgressImmediately() {
+        val currentId = currentLoadedId
+        if (currentId != null && (
+                currentId.startsWith("http://", ignoreCase = true) ||
+                    currentId.startsWith("https://", ignoreCase = true)
+            )
+        ) {
+            val state = player.state.value
+            val duration = state.duration
+            val position = state.currentPosition
+            val percentage = if (duration > 0L) {
+                (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            val isCompleted = hasMarkedCompletedForSession ||
+                (duration > 0L && percentage >= COMPLETION_THRESHOLD) ||
+                state.playbackState == PlaybackStatus.Ended
+            if (isCompleted) {
+                sessionPositions.remove(currentId)
+            } else if (position > 0L) {
+                sessionPositions[currentId] = position
+            }
+            return
+        }
+
         val video = _video.value ?: return
         val state = player.state.value
         val duration = if (state.duration > 0L) state.duration else video.durationMs
@@ -1105,7 +1307,8 @@ class PlayerViewModel internal constructor(
         lastPersistWallTimeMs = now
         lastPersistedPositionMs = position
 
-        viewModelScope.launch(ioDispatcher) {
+        val scope = externalScope ?: viewModelScope
+        scope.launch(ioDispatcher) {
             videoRepository.updatePlaybackProgress(
                 id = video.id,
                 positionMs = position,
@@ -1117,9 +1320,9 @@ class PlayerViewModel internal constructor(
     }
 
     override fun onCleared() {
-        super.onCleared()
         persistCurrentProgressImmediately()
         player.detachPlayerView()
         player.release()
+        super.onCleared()
     }
 }

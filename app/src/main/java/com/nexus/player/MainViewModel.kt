@@ -33,10 +33,13 @@ class MainViewModel @Inject constructor(
     settingsRepository: SettingsRepository
 ) : ViewModel() {
 
+    private var hasTriggeredStartupScan = false
+
     init {
         viewModelScope.launch {
             storageAccessRepository.storageAccessState.collect { accessState ->
-                if (accessState.isOnboardingCompleted && accessState.hasValidStorageAccess) {
+                if (!hasTriggeredStartupScan && accessState.isOnboardingCompleted && accessState.hasValidStorageAccess) {
+                    hasTriggeredStartupScan = true
                     mediaScanOrchestrator.triggerStartupScan()
                 }
             }

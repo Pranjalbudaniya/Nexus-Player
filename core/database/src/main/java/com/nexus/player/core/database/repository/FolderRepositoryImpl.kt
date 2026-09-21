@@ -64,10 +64,8 @@ class FolderRepositoryImpl @Inject constructor(
     }
 
     override fun getFolderByPath(folderPath: String): Flow<VideoFolder?> {
-        return videoDao.getFolders()
-            .map { summaries ->
-                summaries.firstOrNull { it.folderPath == folderPath }?.asDomain()
-            }
+        return videoDao.getFolderSummaryByPath(folderPath)
+            .map { it?.asDomain() }
             .flowOn(ioDispatcher)
     }
 
@@ -84,6 +82,8 @@ class FolderRepositoryImpl @Inject constructor(
             VideoSortOrder.DURATION_ASC -> videoDao.getVideosByFolderDurationAsc(folderPath)
             VideoSortOrder.SIZE_DESC -> videoDao.getVideosByFolderSizeDesc(folderPath)
             VideoSortOrder.SIZE_ASC -> videoDao.getVideosByFolderSizeAsc(folderPath)
+            VideoSortOrder.DATE_MODIFIED_DESC -> videoDao.getVideosByFolderDateModifiedDesc(folderPath)
+            VideoSortOrder.DATE_MODIFIED_ASC -> videoDao.getVideosByFolderDateModifiedAsc(folderPath)
             VideoSortOrder.LAST_PLAYED_DESC,
             VideoSortOrder.LAST_PLAYED_ASC -> videoDao.getVideosByFolderTitleAsc(folderPath)
         }

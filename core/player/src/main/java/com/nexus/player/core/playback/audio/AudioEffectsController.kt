@@ -83,6 +83,12 @@ interface AudioEffectsController {
     fun setBandLevel(bandIndex: Int, levelmB: Int)
 
     /**
+     * Sets multiple band gains at once in millibels (mB).
+     * Sets the preset name to "Custom".
+     */
+    fun setBandLevels(levels: Map<Int, Int>)
+
+    /**
      * Releases all underlying audio effect resources.
      */
     fun release()

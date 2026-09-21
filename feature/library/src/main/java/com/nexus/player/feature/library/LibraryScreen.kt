@@ -55,10 +55,13 @@ import com.nexus.player.core.media.model.MediaMetadata
 import com.nexus.player.core.media.thumbnail.ThumbnailLoader
 import com.nexus.player.core.scanner.model.ScanState
 import com.nexus.player.core.ui.component.HorizontalSpacer
+import com.nexus.player.core.ui.component.NexusEmptyState
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.VerticalSpacer
+import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
+import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 import com.nexus.player.feature.library.component.FolderSortBottomSheet
 import com.nexus.player.feature.library.component.LibraryContextMenuSheet
 import com.nexus.player.feature.library.component.LibraryFolderCard
@@ -141,7 +144,8 @@ fun LibraryRoute(
                     result.onSuccess { renamed ->
                         snackbarHostState.showSnackbar("Renamed to \"${renamed.title}\"")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Rename failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Rename", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -153,7 +157,8 @@ fun LibraryRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Moved to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Move failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Move", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -165,7 +170,8 @@ fun LibraryRoute(
                         val folderName = File(targetPath).name.ifEmpty { "selected folder" }
                         snackbarHostState.showSnackbar("Copied to $folderName")
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Copy failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Copy", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -183,7 +189,8 @@ fun LibraryRoute(
                             viewModel.restoreDeletedVideo(video.id) { restoreResult ->
                                 if (restoreResult.isFailure) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Failed to restore video")
+                                        val restoreMsg = UserFeedbackFormatter.formatFileError("Restore", restoreResult.exceptionOrNull())
+                                        snackbarHostState.showSnackbar(restoreMsg.ifBlank { "Failed to restore video" })
                                     }
                                 }
                             }
@@ -191,7 +198,8 @@ fun LibraryRoute(
                             viewModel.purgeStagedDeletions()
                         }
                     }.onFailure { error ->
-                        snackbarHostState.showSnackbar("Delete failed: ${error.message ?: "Unknown error"}")
+                        val msg = UserFeedbackFormatter.formatFileError("Delete", error)
+                        snackbarHostState.showSnackbar(msg)
                     }
                 }
             }
@@ -396,8 +404,9 @@ fun LibraryScreen(
                             tint = MaterialTheme.colorScheme.error
                         )
                         HorizontalSpacer(spacing.small)
+                        val scanError = uiState.scanState as ScanState.Error
                         Text(
-                            text = (uiState.scanState as ScanState.Error).message,
+                            text = UserFeedbackFormatter.formatScanError(scanError.cause, scanError.message),
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
                         )
@@ -613,69 +622,34 @@ private fun EmptyLibraryView(
     isScanning: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val spacing = NexusTheme.spacing
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(spacing.large),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        val icon = if (selectedTab == LibraryTab.VIDEOS) Icons.Default.VideoLibrary else Icons.Default.Folder
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            modifier = Modifier.size(64.dp)
+    if (isScanning) {
+        NexusLoadingIndicator(
+            label = if (selectedTab == LibraryTab.VIDEOS) "Searching for videos..." else "Searching for folders...",
+            modifier = modifier
         )
-
-        VerticalSpacer(spacing.medium)
-
-        val title = when {
-            isScanning && selectedTab == LibraryTab.VIDEOS -> "Searching for videos..."
-            isScanning && selectedTab == LibraryTab.FOLDERS -> "Searching for folders..."
-            selectedTab == LibraryTab.VIDEOS -> "No Videos Found"
-            else -> "No Folders Found"
-        }
-
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-
-        VerticalSpacer(spacing.small)
-
-        val subtitle = when {
-            isScanning && selectedTab == LibraryTab.VIDEOS ->
-                "We are indexing your device's media storage. Videos will appear here automatically."
-            isScanning && selectedTab == LibraryTab.FOLDERS ->
-                "We are indexing video directories on your device. Folders will appear here automatically."
-            selectedTab == LibraryTab.VIDEOS ->
+    } else {
+        val (icon, title, subtitle) = if (selectedTab == LibraryTab.VIDEOS) {
+            Triple(
+                Icons.Default.VideoLibrary,
+                "No Videos Found",
                 "We couldn't find any videos on your device. Ensure storage access is granted or add video folders to build your library."
-            else ->
+            )
+        } else {
+            Triple(
+                Icons.Default.Folder,
+                "No Folders Found",
                 "No video folders discovered yet. Ensure storage access is granted or rescan your library."
+            )
         }
 
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+        NexusEmptyState(
+            icon = icon,
+            title = title,
+            description = subtitle,
+            actionText = "Rescan Library",
+            actionIcon = Icons.Default.Refresh,
+            onActionClick = onRescanClick,
+            modifier = modifier
         )
-
-        if (!isScanning) {
-            VerticalSpacer(spacing.large)
-
-            Button(onClick = onRescanClick) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null
-                )
-                HorizontalSpacer(spacing.small)
-                Text("Rescan Library")
-            }
-        }
     }
 }
