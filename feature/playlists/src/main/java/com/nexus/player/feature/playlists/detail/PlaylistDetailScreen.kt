@@ -63,6 +63,8 @@ import com.nexus.player.core.media.model.toMediaMetadata
 import com.nexus.player.core.ui.component.NexusEmptyState
 import com.nexus.player.core.ui.component.NexusErrorState
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
+import com.nexus.player.core.ui.component.NexusScaffold
+import com.nexus.player.core.ui.component.NexusTopAppBar
 import com.nexus.player.core.ui.component.contextmenu.VideoActionHost
 import com.nexus.player.core.ui.feedback.UserFeedbackFormatter
 import com.nexus.player.feature.playlists.add.AddToPlaylistBottomSheet
@@ -253,16 +255,10 @@ fun PlaylistDetailContent(
     val playlist = uiState.playlist
     val items = uiState.filteredItems
 
-    Scaffold(
+    NexusScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = playlist?.name ?: "Playlist",
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1
-                    )
-                },
+            NexusTopAppBar(
+                title = playlist?.name ?: "Playlist",
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -321,10 +317,7 @@ fun PlaylistDetailContent(
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -355,7 +348,7 @@ fun PlaylistDetailContent(
                             text = description,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(top = 2.dp)
+                            modifier = Modifier.padding(top = spacing.extraSmall)
                         )
                     }
 

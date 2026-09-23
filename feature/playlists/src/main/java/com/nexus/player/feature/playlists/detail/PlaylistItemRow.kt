@@ -102,7 +102,7 @@ fun PlaylistItemRow(
         // Video title and meta
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(spacing.extraSmall)
         ) {
             Text(
                 text = video?.title ?: "Unavailable Video (${item.videoId})",

@@ -1,6 +1,7 @@
 package com.nexus.player.feature.search.component
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.feature.search.SearchLayoutMode
@@ -59,7 +61,9 @@ fun SearchTopBar(
     }
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding(),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp
     ) {
@@ -91,9 +95,11 @@ fun SearchTopBar(
                     .semantics { contentDescription = "Search input" },
                 placeholder = {
                     Text(
-                        text = "Search videos, folders, 4K...",
+                        text = "Search videos, folders...",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 leadingIcon = {

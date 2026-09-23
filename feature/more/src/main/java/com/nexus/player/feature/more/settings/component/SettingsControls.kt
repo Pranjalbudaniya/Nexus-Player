@@ -74,7 +74,7 @@ fun SettingSectionCard(
         modifier = modifier.fillMaxWidth(),
         shape = NexusTheme.customShapes.card,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {

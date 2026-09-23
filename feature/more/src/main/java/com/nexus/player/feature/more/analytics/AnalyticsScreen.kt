@@ -402,17 +402,16 @@ private fun RecentActivityRow(
 
                 if (item.isCompleted) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = MaterialTheme.shapes.extraSmall,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
                             text = "Completed",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 9.sp
+                                fontWeight = FontWeight.SemiBold
                             ),
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = spacing.extraSmall, vertical = spacing.extraSmall / 2)
                         )
                     }
                 } else {
@@ -430,7 +429,7 @@ private fun RecentActivityRow(
                     progress = { item.playbackPercentage },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(2.dp)),
+                        .clip(MaterialTheme.shapes.extraSmall),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )

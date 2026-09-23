@@ -97,6 +97,7 @@ fun OpenNetworkUrlDialog(
     modifier: Modifier = Modifier
 ) {
     val spacing = NexusTheme.spacing
+    val dimensions = NexusTheme.dimensions
     val shapes = NexusTheme.customShapes
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
@@ -193,7 +194,7 @@ fun OpenNetworkUrlDialog(
                     trailingIcon = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(spacing.extraSmall)
                         ) {
                             if (urlText.isNotEmpty()) {
                                 IconButton(
@@ -206,7 +207,7 @@ fun OpenNetworkUrlDialog(
                                     Icon(
                                         imageVector = Icons.Default.Clear,
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
+                                        modifier = Modifier.size(dimensions.iconSmall),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -227,7 +228,7 @@ fun OpenNetworkUrlDialog(
                                 Icon(
                                     imageVector = Icons.Default.ContentPaste,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(dimensions.iconSmall),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }

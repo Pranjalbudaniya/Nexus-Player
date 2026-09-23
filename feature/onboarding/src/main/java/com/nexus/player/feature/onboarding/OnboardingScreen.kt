@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -155,20 +157,13 @@ fun OnboardingScreen(
                 VerticalSpacer(spacing.medium)
 
                 // Hero Media Icon Badge
-                Box(
+                Image(
+                    painter = painterResource(id = R.drawable.ic_nexus_logo),
+                    contentDescription = "Nexus Player Logo",
                     modifier = Modifier
                         .size(80.dp)
                         .clip(shapes.dialog)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.VideoLibrary,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(dimensions.iconExtraLarge)
-                    )
-                }
+                )
 
                 Text(
                     text = "Welcome to Nexus Player",
@@ -311,7 +306,7 @@ fun OnboardingScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .size(dimensions.buttonHeight),
+                            .height(dimensions.buttonHeight),
                         shape = shapes.card
                     ) {
                         Text(text = "Open App Settings")
@@ -323,7 +318,7 @@ fun OnboardingScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .size(dimensions.buttonHeight),
+                            .height(dimensions.buttonHeight),
                         shape = shapes.card
                     ) {
                         Text(text = "Grant Storage Access")
@@ -333,7 +328,7 @@ fun OnboardingScreen(
                         onClick = onComplete,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .size(dimensions.buttonHeight),
+                            .height(dimensions.buttonHeight),
                         shape = shapes.card
                     ) {
                         Text(text = "Continue to Nexus Player")
@@ -347,7 +342,7 @@ fun OnboardingScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .size(dimensions.buttonHeight),
+                        .height(dimensions.buttonHeight),
                     shape = shapes.card,
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary

@@ -44,6 +44,9 @@ import com.nexus.player.core.designsystem.theme.NexusTheme
 import com.nexus.player.core.ui.component.NexusEmptyState
 import com.nexus.player.core.ui.component.NexusErrorState
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
+import com.nexus.player.core.ui.component.NexusScaffold
+import com.nexus.player.core.ui.component.NexusTopAppBar
+import com.nexus.player.core.ui.component.NexusLoadingIndicator
 import com.nexus.player.feature.playlists.component.CreatePlaylistDialog
 import com.nexus.player.feature.playlists.component.DeletePlaylistConfirmationDialog
 import com.nexus.player.feature.playlists.component.PlaylistCard
@@ -100,15 +103,10 @@ fun PlaylistsContent(
 ) {
     val spacing = NexusTheme.spacing
 
-    Scaffold(
+    NexusScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Playlists",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                },
+            NexusTopAppBar(
+                title = "Playlists",
                 actions = {
                     IconButton(onClick = onOpenCreateDialog) {
                         Icon(
@@ -117,10 +115,7 @@ fun PlaylistsContent(
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                }
             )
         },
         floatingActionButton = {
@@ -220,7 +215,7 @@ fun PlaylistsContent(
                             start = spacing.medium,
                             end = spacing.medium,
                             top = spacing.small,
-                            bottom = 88.dp // Space for FAB and bottom nav
+                            bottom = 80.dp // Space for FAB and bottom nav
                         ),
                         verticalArrangement = Arrangement.spacedBy(spacing.smallMedium),
                         modifier = Modifier.fillMaxSize()

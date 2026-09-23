@@ -3,6 +3,7 @@ package com.nexus.player.core.ui.component.contextmenu
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -235,6 +236,7 @@ private fun ContextMenuActionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = NexusTheme.dimensions.minTouchTarget)
             .clickable(
                 role = Role.Button,
                 onClick = onClick

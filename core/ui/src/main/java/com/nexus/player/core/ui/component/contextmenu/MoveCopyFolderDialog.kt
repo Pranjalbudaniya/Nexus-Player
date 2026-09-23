@@ -135,14 +135,14 @@ fun MoveCopyFolderDialog(
                                     HorizontalSpacer(spacing.small)
                                     Surface(
                                         shape = MaterialTheme.shapes.extraSmall,
-                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
                                     ) {
                                         Text(
                                             text = "Current",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = spacing.small, vertical = spacing.extraSmall)
                                         )
                                     }
                                 }

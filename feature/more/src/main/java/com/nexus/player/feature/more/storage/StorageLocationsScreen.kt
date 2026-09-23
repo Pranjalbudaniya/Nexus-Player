@@ -551,7 +551,7 @@ private fun StorageFolderRow(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
@@ -610,41 +610,38 @@ private fun StorageFolderRow(
             // Quick Actions
             IconButton(
                 onClick = onScanLocation,
-                enabled = !isScanning && folder.isAccessible,
-                modifier = Modifier.size(36.dp)
+                enabled = !isScanning && folder.isAccessible
             ) {
                 Icon(
                     imageVector = Icons.Default.Sync,
                     contentDescription = "Scan this folder",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             if (!isExcluded) {
                 IconButton(
-                    onClick = onExcludeFolder,
-                    modifier = Modifier.size(36.dp)
+                    onClick = onExcludeFolder
                 ) {
                     Icon(
                         imageVector = Icons.Default.Block,
                         contentDescription = "Exclude folder from scans",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
             if (folder.isSafFolder) {
                 IconButton(
-                    onClick = onRemoveFolder,
-                    modifier = Modifier.size(36.dp)
+                    onClick = onRemoveFolder
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Remove folder",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -663,7 +660,7 @@ private fun ExcludedFolderRow(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        shape = RoundedCornerShape(8.dp)
+        shape = MaterialTheme.shapes.small
     ) {
         Row(
             modifier = Modifier

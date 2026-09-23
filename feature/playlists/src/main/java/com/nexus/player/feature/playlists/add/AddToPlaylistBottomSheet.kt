@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -82,7 +83,7 @@ fun AddToPlaylistBottomSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = spacing.extraSmall)
             )
 
             if (uiState.errorMessage != null) {
@@ -90,7 +91,7 @@ fun AddToPlaylistBottomSheet(
                     text = uiState.errorMessage!!,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = spacing.extraSmall)
                 )
             }
 
@@ -139,6 +140,7 @@ fun AddToPlaylistBottomSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .defaultMinSize(minHeight = NexusTheme.dimensions.minTouchTarget)
                         .clickable(role = Role.Button, onClick = viewModel::openCreateNew)
                         .padding(vertical = spacing.small),
                     verticalAlignment = Alignment.CenterVertically
@@ -175,6 +177,7 @@ fun AddToPlaylistBottomSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .defaultMinSize(minHeight = NexusTheme.dimensions.minTouchTarget)
                             .clickable(
                                 enabled = !isAlreadyMember,
                                 role = Role.Button,

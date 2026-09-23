@@ -123,7 +123,7 @@ private fun InfoRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(vertical = spacing.extraSmall)
     ) {
         Text(
             text = label,

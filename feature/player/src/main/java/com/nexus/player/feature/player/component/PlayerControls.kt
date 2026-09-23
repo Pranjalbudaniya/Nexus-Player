@@ -252,7 +252,7 @@ fun PlayerControls(
                     onClick = onPreviousClick,
                     enabled = state.canGoPrevious,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(NexusTheme.dimensions.minTouchTarget)
                         .testTag("player_previous_button")
                 ) {
                     Icon(
@@ -303,7 +303,7 @@ fun PlayerControls(
                     onClick = onNextClick,
                     enabled = state.hasNext,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(NexusTheme.dimensions.minTouchTarget)
                         .testTag("player_next_button")
                 ) {
                     Icon(
@@ -377,7 +377,7 @@ fun PlayerControls(
                         ) {
                             // Audio + Subtitle dedicated button
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = MaterialTheme.shapes.small,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f),
                                 contentColor = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
@@ -386,9 +386,9 @@ fun PlayerControls(
                                     .clickable(onClick = onOpenAudioSubtitles)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = NexusTheme.spacing.small, vertical = NexusTheme.spacing.extraSmall),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Audiotrack,

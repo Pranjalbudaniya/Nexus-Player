@@ -223,7 +223,7 @@ fun AudioSubtitlesSheet(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Subtitles,
@@ -249,18 +249,18 @@ fun AudioSubtitlesSheet(
 
             // "Off" Option
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = MaterialTheme.shapes.small,
                 color = if (!areSubtitlesEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.Transparent,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .clickable { onSelectSubtitleTrack(null) }
                     .testTag("subtitle_track_off")
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                        .padding(NexusTheme.spacing.small),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -292,22 +292,22 @@ fun AudioSubtitlesSheet(
             }
 
             if (subtitleTracks.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)) {
                     subtitleTracks.forEach { track ->
                         val isTrackActive = areSubtitlesEnabled && track.isSelected
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = MaterialTheme.shapes.small,
                             color = if (isTrackActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else Color.Transparent,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(MaterialTheme.shapes.small)
                                 .clickable { onSelectSubtitleTrack(track.id) }
                                 .testTag("subtitle_track_${track.id}")
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                                    .padding(NexusTheme.spacing.small),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -356,7 +356,7 @@ fun AudioSubtitlesSheet(
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(NexusTheme.spacing.small))
                 Text("Add Subtitle File (SRT, VTT, ASS)")
             }
 
@@ -369,7 +369,7 @@ fun AudioSubtitlesSheet(
             // =========================================================================
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
             ) {
                 Icon(
                     imageVector = Icons.Filled.Sync,
@@ -403,7 +403,7 @@ fun AudioSubtitlesSheet(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(NexusTheme.spacing.extraSmall))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small),
