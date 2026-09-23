@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.player.core.common.settings.model.AccentColor
@@ -211,6 +212,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val uriHandler = LocalUriHandler.current
     var activeDialog by remember { mutableStateOf<ActiveDialog?>(null) }
 
     LaunchedEffect(uiState.userMessage) {
@@ -546,6 +548,16 @@ fun SettingsScreen(
                         description = "Third-party libraries, notices, and attribution",
                         trailingIcon = Icons.AutoMirrored.Filled.ArrowForwardIos,
                         onClick = { onOpenAboutDialog(AboutDialogType.LICENSES) }
+                    )
+                    SettingActionRow(
+                        title = "GitHub Repository",
+                        description = "https://github.com/Pranjalbudaniya/Nexus-Player",
+                        trailingIcon = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        onClick = {
+                            try {
+                                uriHandler.openUri("https://github.com/Pranjalbudaniya/Nexus-Player")
+                            } catch (_: Exception) {}
+                        }
                     )
                     SettingActionRow(
                         title = "Acknowledgements",

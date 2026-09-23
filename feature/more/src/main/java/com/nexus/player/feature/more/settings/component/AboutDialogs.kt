@@ -12,12 +12,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,13 +90,15 @@ fun ProjectInfoDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val uriHandler = LocalUriHandler.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.smallMedium)
+                verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_nexus_logo),
@@ -108,6 +112,11 @@ fun ProjectInfoDialog(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Version 1.0.0",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -139,6 +148,27 @@ fun ProjectInfoDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Text(
+                    text = "GitHub Repository:",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            uriHandler.openUri("https://github.com/Pranjalbudaniya/Nexus-Player")
+                        } catch (_: Exception) {}
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = "View on GitHub",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
             }
         },
         confirmButton = {
