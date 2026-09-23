@@ -42,6 +42,7 @@ fun PlayerGestureSurface(
     onPanChange: (Float, Float, Float, Float) -> Unit,
     onResetZoom: () -> Unit,
     isZoomed: Boolean,
+    isPressAndHoldSpeedEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val viewConfig = LocalViewConfiguration.current
@@ -50,7 +51,7 @@ fun PlayerGestureSurface(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(isZoomed) {
+            .pointerInput(isZoomed, isPressAndHoldSpeedEnabled) {
                 val touchSlop = viewConfig.touchSlop
                 val doubleTapTimeoutMs = 300L
                 val longPressTimeoutMs = 400L
@@ -79,6 +80,7 @@ fun PlayerGestureSurface(
 
                     // Launch long press timer for speed boost
                     val longPressJob = scope.launch {
+                        if (!isPressAndHoldSpeedEnabled) return@launch
                         delay(longPressTimeoutMs)
                         if (!isDragging && !isPanning && !isMultiTouchActive) {
                             isLongPressActive = true

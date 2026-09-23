@@ -70,6 +70,7 @@ class SettingsRepositoryImpl @Inject constructor(
         // Player
         val SEEK_DURATION_SECONDS = intPreferencesKey("key_player_seek_duration_seconds")
         val DOUBLE_TAP_SEEK_ENABLED = booleanPreferencesKey("key_player_double_tap_seek")
+        val PRESS_HOLD_SPEED_ENABLED = booleanPreferencesKey("key_player_press_hold_speed_enabled")
         val PRESS_HOLD_SPEED = floatPreferencesKey("key_player_press_hold_speed")
         val DEFAULT_DISPLAY_MODE = stringPreferencesKey("key_player_default_display_mode")
 
@@ -147,6 +148,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val player = PlayerSettings(
             seekDurationSeconds = this[Keys.SEEK_DURATION_SECONDS] ?: 10,
             isDoubleTapSeekEnabled = this[Keys.DOUBLE_TAP_SEEK_ENABLED] ?: true,
+            isPressAndHoldSpeedEnabled = this[Keys.PRESS_HOLD_SPEED_ENABLED] ?: true,
             pressAndHoldSpeed = this[Keys.PRESS_HOLD_SPEED] ?: 2.0f,
             defaultDisplayMode = parseEnum(this[Keys.DEFAULT_DISPLAY_MODE], VideoDisplayMode.FIT)
         )
@@ -275,6 +277,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun setDoubleTapSeekEnabled(enabled: Boolean) {
         withContext(ioDispatcher) {
             dataStore.edit { it[Keys.DOUBLE_TAP_SEEK_ENABLED] = enabled }
+        }
+    }
+
+    override suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+        withContext(ioDispatcher) {
+            dataStore.edit { it[Keys.PRESS_HOLD_SPEED_ENABLED] = enabled }
         }
     }
 

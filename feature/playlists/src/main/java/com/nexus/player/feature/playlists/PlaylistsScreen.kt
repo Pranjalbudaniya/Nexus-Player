@@ -4,10 +4,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -122,7 +127,10 @@ fun PlaylistsContent(
             FloatingActionButton(
                 onClick = onOpenCreateDialog,
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 80.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
@@ -137,7 +145,7 @@ fun PlaylistsContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             // Search field when playlists exist
             if (uiState.playlists.isNotEmpty()) {
@@ -209,13 +217,13 @@ fun PlaylistsContent(
                     )
                 }
                 else -> {
-                    // Playlists List
+                    val bottomNavPadding = 110.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     LazyColumn(
                         contentPadding = PaddingValues(
                             start = spacing.medium,
                             end = spacing.medium,
                             top = spacing.small,
-                            bottom = 80.dp // Space for FAB and bottom nav
+                            bottom = bottomNavPadding
                         ),
                         verticalArrangement = Arrangement.spacedBy(spacing.smallMedium),
                         modifier = Modifier.fillMaxSize()

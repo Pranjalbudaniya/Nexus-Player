@@ -27,10 +27,9 @@ import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FitScreen
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.PhotoSizeSelectActual
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.ZoomOutMap
 import com.nexus.player.core.playback.model.VideoScaleMode
@@ -141,7 +140,7 @@ fun PlayerGestureHud(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = if (hudState.isForward) Icons.Filled.Forward10 else Icons.Filled.Replay10,
+                            imageVector = if (hudState.isForward) Icons.Filled.FastForward else Icons.Filled.FastRewind,
                             contentDescription = null,
                             modifier = Modifier.size(24.dp)
                         )
@@ -203,6 +202,7 @@ fun PlayerGestureHud(
             modifier = Modifier.align(Alignment.Center)
         ) {
             if (hudState is GestureHudState.Volume) {
+                val isBoosted = hudState.percent > 100
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f),
@@ -221,20 +221,27 @@ fun PlayerGestureHud(
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isBoosted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp)
                         )
                         LinearProgressIndicator(
-                            progress = { hudState.percent / 100f },
+                            progress = {
+                                if (isBoosted) {
+                                    (hudState.percent - 100) / 100f
+                                } else {
+                                    hudState.percent / 100f
+                                }
+                            },
                             modifier = Modifier
                                 .width(100.dp)
                                 .height(6.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                            color = if (isBoosted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            trackColor = if (isBoosted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                         )
                         Text(
-                            text = "${hudState.percent}%",
-                            style = MaterialTheme.typography.labelMedium
+                            text = if (isBoosted) "${hudState.percent}% (Boost)" else "${hudState.percent}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isBoosted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 /**
  * Curated custom accent color tokens for Nexus Player.
@@ -194,6 +195,8 @@ object NexusColorSchemes {
 
     /**
      * Converts a curated [NexusAccentColor] into a complete, harmonious Material 3 [ColorScheme].
+     * Tints surfaces, containers, backgrounds, and borders with the accent color so the entire app
+     * reflects the chosen accent theme.
      */
     fun fromAccent(
         accent: NexusAccentColor,
@@ -201,22 +204,66 @@ object NexusColorSchemes {
         isAmoled: Boolean = false
     ): ColorScheme {
         val baseScheme = if (isDark) {
+            val neutralDark = Color(red = 0.08f, green = 0.08f, blue = 0.10f)
+            val darkBg = lerp(Color(red = 0.06f, green = 0.06f, blue = 0.07f), accent.darkPrimary, 0.07f)
+            val darkSurface = lerp(neutralDark, accent.darkPrimary, 0.09f)
+            val darkSurfaceContainerLow = lerp(Color(red = 0.11f, green = 0.11f, blue = 0.13f), accent.darkPrimary, 0.12f)
+            val darkSurfaceContainer = lerp(Color(red = 0.14f, green = 0.14f, blue = 0.17f), accent.darkPrimary, 0.15f)
+            val darkSurfaceContainerHigh = lerp(Color(red = 0.18f, green = 0.18f, blue = 0.22f), accent.darkPrimary, 0.19f)
+            val darkSurfaceContainerHighest = lerp(Color(red = 0.22f, green = 0.22f, blue = 0.26f), accent.darkPrimary, 0.24f)
+            val darkSurfaceVariant = lerp(Color(red = 0.26f, green = 0.26f, blue = 0.30f), accent.darkSecondary, 0.20f)
+
             darkColorScheme(
                 primary = accent.darkPrimary,
                 onPrimary = accent.darkOnPrimary,
                 primaryContainer = accent.darkPrimaryContainer,
                 onPrimaryContainer = accent.darkOnPrimaryContainer,
                 secondary = accent.darkSecondary,
-                secondaryContainer = accent.darkSecondaryContainer
+                secondaryContainer = accent.darkSecondaryContainer,
+                background = darkBg,
+                onBackground = Color(red = 0.92f, green = 0.92f, blue = 0.94f),
+                surface = darkSurface,
+                onSurface = Color(red = 0.92f, green = 0.92f, blue = 0.94f),
+                surfaceVariant = darkSurfaceVariant,
+                onSurfaceVariant = Color(red = 0.78f, green = 0.78f, blue = 0.82f),
+                surfaceContainerLowest = Color(red = 0.04f, green = 0.04f, blue = 0.05f),
+                surfaceContainerLow = darkSurfaceContainerLow,
+                surfaceContainer = darkSurfaceContainer,
+                surfaceContainerHigh = darkSurfaceContainerHigh,
+                surfaceContainerHighest = darkSurfaceContainerHighest,
+                outline = lerp(Color(red = 0.45f, green = 0.45f, blue = 0.50f), accent.darkPrimary, 0.25f),
+                outlineVariant = lerp(Color(red = 0.28f, green = 0.28f, blue = 0.32f), accent.darkPrimary, 0.20f)
             )
         } else {
+            val neutralLight = Color(red = 0.98f, green = 0.98f, blue = 0.99f)
+            val lightBg = lerp(Color(red = 0.98f, green = 0.98f, blue = 0.99f), accent.lightPrimary, 0.04f)
+            val lightSurface = lerp(neutralLight, accent.lightPrimary, 0.05f)
+            val lightSurfaceContainerLow = lerp(Color(red = 0.95f, green = 0.95f, blue = 0.96f), accent.lightPrimary, 0.08f)
+            val lightSurfaceContainer = lerp(Color(red = 0.92f, green = 0.92f, blue = 0.94f), accent.lightPrimary, 0.12f)
+            val lightSurfaceContainerHigh = lerp(Color(red = 0.88f, green = 0.88f, blue = 0.91f), accent.lightPrimary, 0.16f)
+            val lightSurfaceContainerHighest = lerp(Color(red = 0.84f, green = 0.84f, blue = 0.88f), accent.lightPrimary, 0.20f)
+            val lightSurfaceVariant = lerp(Color(red = 0.86f, green = 0.86f, blue = 0.90f), accent.lightSecondary, 0.18f)
+
             lightColorScheme(
                 primary = accent.lightPrimary,
                 onPrimary = accent.lightOnPrimary,
                 primaryContainer = accent.lightPrimaryContainer,
                 onPrimaryContainer = accent.lightOnPrimaryContainer,
                 secondary = accent.lightSecondary,
-                secondaryContainer = accent.lightSecondaryContainer
+                secondaryContainer = accent.lightSecondaryContainer,
+                background = lightBg,
+                onBackground = Color(red = 0.10f, green = 0.10f, blue = 0.12f),
+                surface = lightSurface,
+                onSurface = Color(red = 0.10f, green = 0.10f, blue = 0.12f),
+                surfaceVariant = lightSurfaceVariant,
+                onSurfaceVariant = Color(red = 0.30f, green = 0.30f, blue = 0.35f),
+                surfaceContainerLowest = Color.White,
+                surfaceContainerLow = lightSurfaceContainerLow,
+                surfaceContainer = lightSurfaceContainer,
+                surfaceContainerHigh = lightSurfaceContainerHigh,
+                surfaceContainerHighest = lightSurfaceContainerHighest,
+                outline = lerp(Color(red = 0.55f, green = 0.55f, blue = 0.60f), accent.lightPrimary, 0.25f),
+                outlineVariant = lerp(Color(red = 0.78f, green = 0.78f, blue = 0.82f), accent.lightPrimary, 0.20f)
             )
         }
 
@@ -257,31 +304,30 @@ object NexusColorSchemes {
      * Master ColorScheme resolver based on the current [ThemeConfig].
      *
      * Resolution hierarchy:
-     * 1. Custom Accent overrides dynamic theming when chosen (accent != DEFAULT).
-     * 2. Follows Android 12+ dynamic wallpaper colors if enabled and supported.
-     * 3. Falls back gracefully to the standard Nexus Material 3 theme.
-     * 4. Applies AMOLED true-black surfaces when active in dark mode.
+     * 1. Dynamic Material You wallpaper theme takes precedence if enabled.
+     * 2. When dynamic theme is OFF, custom accent color takes effect (tinting entire app).
+     * 3. Falls back gracefully to standard Nexus Material 3 theme.
+     * 4. Applies AMOLED true-black surfaces when AMOLED is active.
      */
     fun forConfig(
         context: Context,
         config: ThemeConfig,
         systemInDark: Boolean
     ): ColorScheme {
+        val isAmoled = config.isAmoled || config.themeMode == NexusThemeMode.AMOLED
         val isDark = when (config.themeMode) {
-            NexusThemeMode.SYSTEM -> systemInDark
-            NexusThemeMode.LIGHT -> false
+            NexusThemeMode.SYSTEM -> systemInDark || isAmoled
+            NexusThemeMode.LIGHT -> isAmoled
             NexusThemeMode.DARK -> true
             NexusThemeMode.AMOLED -> true
         }
 
-        val isAmoled = config.isAmoled || config.themeMode == NexusThemeMode.AMOLED
-
-        return if (config.accentColor != NexusAccentColor.DEFAULT) {
-            // Explicit user accent selection overrides dynamic colors
-            fromAccent(config.accentColor, isDark = isDark, isAmoled = isDark && isAmoled)
-        } else if (config.dynamicColor) {
+        return if (config.dynamicColor) {
             // System dynamic wallpaper colors
             dynamic(context = context, isDark = isDark, isAmoled = isDark && isAmoled)
+        } else if (config.accentColor != NexusAccentColor.DEFAULT) {
+            // Explicit user accent selection when dynamic color is OFF
+            fromAccent(config.accentColor, isDark = isDark, isAmoled = isDark && isAmoled)
         } else {
             // Default M3 theme
             if (isDark) {

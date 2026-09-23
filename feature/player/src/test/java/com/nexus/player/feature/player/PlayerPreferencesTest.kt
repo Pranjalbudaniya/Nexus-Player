@@ -103,6 +103,20 @@ class PlayerPreferencesTest {
     }
 
     @Test
+    fun isPressAndHoldSpeedEnabled_defaultIsTrue() = runTest(testDispatcher) {
+        assertTrue(repository.isPressAndHoldSpeedEnabled.first())
+    }
+
+    @Test
+    fun isPressAndHoldSpeedEnabled_updatesAndPersists() = runTest(testDispatcher) {
+        repository.setPressAndHoldSpeedEnabled(false)
+        assertFalse(repository.isPressAndHoldSpeedEnabled.first())
+
+        repository.setPressAndHoldSpeedEnabled(true)
+        assertTrue(repository.isPressAndHoldSpeedEnabled.first())
+    }
+
+    @Test
     fun formatPlaybackSpeed_formatsCorrectly() {
         assertEquals("1×", formatPlaybackSpeed(1.0f))
         assertEquals("0.5×", formatPlaybackSpeed(0.5f))

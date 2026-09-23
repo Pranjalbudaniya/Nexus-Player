@@ -89,100 +89,7 @@ fun AudioSettingsCard(
                 .padding(bottom = NexusTheme.spacing.small)
         ) {
             // =========================================================================
-            // 1. Audio Boost Section
-            // =========================================================================
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Audio Boost",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Amplify dialog and quiet audio up to 200%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (settings.audioBoostPercent > 100) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh
-                    },
-                    modifier = Modifier.testTag("audio_boost_status_badge")
-                ) {
-                    val gainDb = ((settings.audioBoostPercent - 100) / 100f * 10).roundToInt()
-                    Text(
-                        text = if (settings.audioBoostPercent > 100) {
-                            "${settings.audioBoostPercent}% (+$gainDb dB)"
-                        } else {
-                            "100% (Normal)"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Medium,
-                        color = if (settings.audioBoostPercent > 100) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            VerticalSpacer(NexusTheme.spacing.small)
-
-            Slider(
-                value = settings.audioBoostPercent.toFloat(),
-                onValueChange = { onSetAudioBoostPercent(it.roundToInt()) },
-                valueRange = 100f..200f,
-                steps = 9,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics {
-                        contentDescription = "Audio boost: ${settings.audioBoostPercent}%"
-                    }
-                    .testTag("audio_boost_slider")
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
-            ) {
-                AUDIO_BOOST_CHIPS.forEach { boost ->
-                    FilterChip(
-                        selected = settings.audioBoostPercent == boost,
-                        onClick = { onSetAudioBoostPercent(boost) },
-                        label = { Text("${boost}%", style = MaterialTheme.typography.labelSmall) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("chip_audio_boost_${boost}")
-                    )
-                }
-            }
-
-            VerticalSpacer(NexusTheme.spacing.small)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            VerticalSpacer(NexusTheme.spacing.small)
-
-            // =========================================================================
-            // 2. Hardware Equalizer Section
+            // 1. Hardware Equalizer Section
             // =========================================================================
             SettingSwitchRow(
                 title = "Hardware Equalizer",
@@ -358,7 +265,7 @@ fun AudioSettingsCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AUDIO_DELAY_CHIPS.forEach { delayMs ->
@@ -366,7 +273,14 @@ fun AudioSettingsCard(
                     FilterChip(
                         selected = settings.audioDelayMs == delayMs,
                         onClick = { onSetAudioDelayMs(delayMs) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                        label = {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
                             selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer

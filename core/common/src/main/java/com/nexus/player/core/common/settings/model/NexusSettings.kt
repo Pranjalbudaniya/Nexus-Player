@@ -85,6 +85,7 @@ data class PlaybackSettings(
 data class PlayerSettings(
     val seekDurationSeconds: Int = 10,
     val isDoubleTapSeekEnabled: Boolean = true,
+    val isPressAndHoldSpeedEnabled: Boolean = true,
     val pressAndHoldSpeed: Float = 2.0f,
     val defaultDisplayMode: VideoDisplayMode = VideoDisplayMode.FIT
 )

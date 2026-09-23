@@ -109,6 +109,7 @@ fun SettingsRoute(
         onSetSeekDurationSeconds = viewModel::setSeekDurationSeconds,
         onSetDoubleTapSeekEnabled = viewModel::setDoubleTapSeekEnabled,
         onSetPressAndHoldSpeed = viewModel::setPressAndHoldSpeed,
+        onSetPressAndHoldSpeedEnabled = viewModel::setPressAndHoldSpeedEnabled,
         onSetDefaultDisplayMode = viewModel::setDefaultDisplayMode,
         onSetSubtitlesEnabled = viewModel::setSubtitlesEnabled,
         onSetPreferredSubtitleLanguage = viewModel::setPreferredSubtitleLanguage,
@@ -168,6 +169,7 @@ fun SettingsScreen(
     onSetSeekDurationSeconds: (Int) -> Unit,
     onSetDoubleTapSeekEnabled: (Boolean) -> Unit,
     onSetPressAndHoldSpeed: (Float) -> Unit,
+    onSetPressAndHoldSpeedEnabled: (Boolean) -> Unit = {},
     onSetDefaultDisplayMode: (VideoDisplayMode) -> Unit,
     onSetSubtitlesEnabled: (Boolean) -> Unit,
     onSetPreferredSubtitleLanguage: (String) -> Unit,
@@ -252,7 +254,47 @@ fun SettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(NexusTheme.spacing.medium)
         ) {
-            // 1. PLAYBACK
+            // 1. APPEARANCE
+            item(key = "section_appearance") {
+                SettingSectionCard(
+                    title = SettingSection.APPEARANCE.title,
+                    subtitle = SettingSection.APPEARANCE.subtitle,
+                    icon = Icons.Default.Palette,
+                    isExpanded = uiState.expandedSections.contains(SettingSection.APPEARANCE),
+                    onToggleExpand = { onToggleSection(SettingSection.APPEARANCE) }
+                ) {
+                    SettingSelectRow(
+                        title = "Theme Mode",
+                        currentValue = uiState.settings.appearance.themeMode.label,
+                        onClick = { activeDialog = ActiveDialog.THEME_MODE },
+                        description = "Switch between dark, light, or system themes"
+                    )
+                    SettingSwitchRow(
+                        title = "AMOLED True Black",
+                        checked = uiState.settings.appearance.useAmoledMode,
+                        onCheckedChange = onSetAmoledMode,
+                        enabled = true,
+                        description = "Pitch-black canvas for OLED power savings and deep contrast"
+                    )
+                    SettingSwitchRow(
+                        title = "Dynamic Material You Colors",
+                        checked = uiState.settings.appearance.useDynamicColor,
+                        onCheckedChange = onSetDynamicColor,
+                        description = if (uiState.settings.appearance.useDynamicColor) {
+                            "Derive accent palette from device wallpaper on supported Android 12+ devices"
+                        } else {
+                            "Turned off: custom accent color is active"
+                        }
+                    )
+                    AccentColorPicker(
+                        selectedAccent = uiState.settings.appearance.accentColor,
+                        onAccentSelected = onSetAccentColor,
+                        enabled = !uiState.settings.appearance.useDynamicColor
+                    )
+                }
+            }
+
+            // 2. PLAYBACK
             item(key = "section_playback") {
                 SettingSectionCard(
                     title = SettingSection.PLAYBACK.title,
@@ -309,11 +351,18 @@ fun SettingsScreen(
                         onCheckedChange = onSetDoubleTapSeekEnabled,
                         description = "Double-tap edges of screen to skip forward/backward"
                     )
+                    SettingSwitchRow(
+                        title = "Press & Hold to Boost Speed",
+                        checked = uiState.settings.player.isPressAndHoldSpeedEnabled,
+                        onCheckedChange = onSetPressAndHoldSpeedEnabled,
+                        description = "Long press player screen to temporarily increase playback speed"
+                    )
                     SettingSelectRow(
                         title = "Press & Hold Speed",
                         currentValue = "${uiState.settings.player.pressAndHoldSpeed}x",
                         onClick = { activeDialog = ActiveDialog.PRESS_HOLD_SPEED },
-                        description = "Temporary playback speed while long-pressing player screen"
+                        description = "Temporary playback speed while long-pressing player screen",
+                        enabled = uiState.settings.player.isPressAndHoldSpeedEnabled
                     )
                     SettingSelectRow(
                         title = "Default Display Mode",
@@ -366,44 +415,6 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. APPEARANCE
-            item(key = "section_appearance") {
-                SettingSectionCard(
-                    title = SettingSection.APPEARANCE.title,
-                    subtitle = SettingSection.APPEARANCE.subtitle,
-                    icon = Icons.Default.Palette,
-                    isExpanded = uiState.expandedSections.contains(SettingSection.APPEARANCE),
-                    onToggleExpand = { onToggleSection(SettingSection.APPEARANCE) }
-                ) {
-                    SettingSelectRow(
-                        title = "Theme Mode",
-                        currentValue = uiState.settings.appearance.themeMode.label,
-                        onClick = { activeDialog = ActiveDialog.THEME_MODE },
-                        description = "Switch between dark, light, or system themes"
-                    )
-                    SettingSwitchRow(
-                        title = "AMOLED True Black",
-                        checked = uiState.settings.appearance.useAmoledMode,
-                        onCheckedChange = onSetAmoledMode,
-                        enabled = uiState.settings.appearance.themeMode != ThemeMode.LIGHT,
-                        description = "Pitch-black canvas for OLED power savings and deep contrast in dark mode"
-                    )
-                    SettingSwitchRow(
-                        title = "Dynamic Material You Colors",
-                        checked = uiState.settings.appearance.useDynamicColor,
-                        onCheckedChange = onSetDynamicColor,
-                        description = if (uiState.settings.appearance.accentColor != AccentColor.DEFAULT) {
-                            "Overridden by custom accent color below"
-                        } else {
-                            "Derive accent palette from device wallpaper on supported Android 12+ devices"
-                        }
-                    )
-                    AccentColorPicker(
-                        selectedAccent = uiState.settings.appearance.accentColor,
-                        onAccentSelected = onSetAccentColor
-                    )
-                }
-            }
 
             // 6. AUDIO
             item(key = "section_audio") {

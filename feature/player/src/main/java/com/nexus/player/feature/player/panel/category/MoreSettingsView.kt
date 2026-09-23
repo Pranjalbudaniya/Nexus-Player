@@ -104,16 +104,18 @@ fun MoreSettingsView(
 
         Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
 
-        PlayerSettingItem(
-            title = "Auto-play Next",
-            subtitle = "Play subsequent video automatically",
-            leadingIcon = Icons.Filled.SkipNext,
-            trailingValue = if (state.isAutoNextEnabled) "On" else "Off",
-            onClick = { onAutoNextToggled(!state.isAutoNextEnabled) },
-            testTag = "setting_auto_next"
-        )
+        if (state.queueSize > 1) {
+            PlayerSettingItem(
+                title = "Auto-play Next",
+                subtitle = "Play subsequent video automatically",
+                leadingIcon = Icons.Filled.SkipNext,
+                trailingValue = if (state.isAutoNextEnabled) "On" else "Off",
+                onClick = { onAutoNextToggled(!state.isAutoNextEnabled) },
+                testTag = "setting_auto_next"
+            )
+            Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
+        }
 
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
 
@@ -139,6 +141,8 @@ fun MoreSettingsView(
             testTag = "action_sleep_timer"
         )
 
+        Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
+
         PlayerSettingItem(
             title = "Equalizer",
             subtitle = if (state.isEqualizerEnabled) "Active: ${state.equalizerPreset}" else "Disabled",
@@ -147,35 +151,6 @@ fun MoreSettingsView(
             onClick = onOpenEqualizer,
             testTag = "action_equalizer"
         )
-
-        Spacer(modifier = Modifier.height(NexusTheme.spacing.extraSmall))
-
-        Text(
-            text = "Audio Boost: ${state.audioBoostPercent}%",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = NexusTheme.spacing.extraSmall, bottom = NexusTheme.spacing.extraSmall)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.extraSmall)
-        ) {
-            listOf(100, 110, 125, 150, 175, 200).forEach { boost ->
-                FilterChip(
-                    selected = state.audioBoostPercent == boost,
-                    onClick = { onAudioBoostSelected(boost) },
-                    label = { Text("${boost}%", style = MaterialTheme.typography.labelSmall) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("more_audio_boost_${boost}")
-                )
-            }
-        }
 
         Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

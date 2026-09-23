@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -236,7 +239,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             // Subtle scanning banner when media library is actively being indexed
             val isScanning = when (uiState) {
@@ -317,9 +320,13 @@ fun HomeScreen(
                 }
 
                 is HomeUiState.Success -> {
+                    val bottomNavPadding = 110.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = spacing.extraSmall),
+                        contentPadding = PaddingValues(
+                            top = spacing.extraSmall,
+                            bottom = bottomNavPadding
+                        ),
                         verticalArrangement = Arrangement.spacedBy(spacing.medium)
                     ) {
                         // =========================================================================

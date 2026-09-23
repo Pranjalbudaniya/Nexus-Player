@@ -36,6 +36,7 @@ interface SettingsRepository {
     // --- Player Section ---
     suspend fun setSeekDurationSeconds(seconds: Int) {}
     suspend fun setDoubleTapSeekEnabled(enabled: Boolean) {}
+    suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean) {}
     suspend fun setPressAndHoldSpeed(speed: Float) {}
     suspend fun setDefaultDisplayMode(mode: VideoDisplayMode) {}
     // --- Subtitles Section ---

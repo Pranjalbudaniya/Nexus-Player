@@ -1,9 +1,11 @@
 package com.nexus.player.ui
 
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -19,7 +21,6 @@ import com.nexus.player.core.navigation.TopLevelDestination
 import com.nexus.player.core.navigation.navigateToTopLevelDestination
 import com.nexus.player.core.ui.component.NexusBottomBar
 import com.nexus.player.core.ui.component.NexusLoadingIndicator
-import com.nexus.player.core.ui.component.NexusScaffold
 import com.nexus.player.navigation.NexusNavHost
 
 /**
@@ -50,28 +51,28 @@ fun NexusApp(
 
             val isTopLevelDestination = currentTopLevelDestination != null
 
-            NexusScaffold(
-                modifier = modifier.fillMaxSize(),
-                contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                bottomBar = {
-                    if (isTopLevelDestination) {
-                        NexusBottomBar(
-                            destinations = TopLevelDestination.entries,
-                            currentDestination = currentTopLevelDestination,
-                            onNavigateToDestination = { destination ->
-                                navController.navigateToTopLevelDestination(destination)
-                            }
-                        )
-                    }
-                }
-            ) { innerPadding ->
+            Box(
+                modifier = modifier.fillMaxSize()
+            ) {
                 NexusNavHost(
                     navController = navController,
-                    modifier = Modifier.padding(
-                        bottom = if (isTopLevelDestination) innerPadding.calculateBottomPadding() else 0.dp
-                    ),
+                    modifier = Modifier.fillMaxSize(),
                     startDestination = state.startDestination
                 )
+
+                if (isTopLevelDestination) {
+                    NexusBottomBar(
+                        destinations = TopLevelDestination.entries,
+                        currentDestination = currentTopLevelDestination,
+                        onNavigateToDestination = { destination ->
+                            navController.navigateToTopLevelDestination(destination)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 24.dp, vertical = 10.dp)
+                    )
+                }
             }
         }
     }

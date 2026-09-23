@@ -51,6 +51,7 @@ interface PlayerPreferencesRepository {
     val subtitleAppearance: Flow<SubtitleAppearance>
     val seekDurationSeconds: Flow<Int>
     val isAutoNextEnabled: Flow<Boolean>
+    val isPressAndHoldSpeedEnabled: Flow<Boolean>
     val audioBoostPercent: Flow<Int>
     val isEqualizerEnabled: Flow<Boolean>
     val equalizerPreset: Flow<String>
@@ -71,6 +72,7 @@ interface PlayerPreferencesRepository {
     suspend fun setSubtitleAppearance(appearance: SubtitleAppearance)
     suspend fun setSeekDurationSeconds(duration: Int)
     suspend fun setAutoNextEnabled(enabled: Boolean)
+    suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean)
     suspend fun setAudioBoost(percent: Int)
     suspend fun setEqualizerEnabled(enabled: Boolean)
     suspend fun setEqualizerPreset(preset: String)
@@ -112,6 +114,7 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
         val SUBTITLE_TRACK_BEHAVIOR = stringPreferencesKey("key_player_sub_track_behavior")
         val SEEK_DURATION_SECONDS = intPreferencesKey("key_player_seek_duration_seconds")
         val AUTO_NEXT_ENABLED = booleanPreferencesKey("key_player_auto_next_enabled")
+        val PRESS_HOLD_SPEED_ENABLED = booleanPreferencesKey("key_player_press_hold_speed_enabled")
         val AUDIO_BOOST = intPreferencesKey("key_player_audio_boost")
         val EQUALIZER_ENABLED = booleanPreferencesKey("key_player_equalizer_enabled")
         val EQUALIZER_PRESET = stringPreferencesKey("key_player_equalizer_preset")
@@ -143,6 +146,11 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override val isAutoNextEnabled: Flow<Boolean> = safePreferences
         .map { prefs ->
             prefs[PreferencesKeys.AUTO_NEXT_ENABLED] ?: false
+        }
+
+    override val isPressAndHoldSpeedEnabled: Flow<Boolean> = safePreferences
+        .map { prefs ->
+            prefs[PreferencesKeys.PRESS_HOLD_SPEED_ENABLED] ?: true
         }
 
     override val audioBoostPercent: Flow<Int> = safePreferences
@@ -322,6 +330,12 @@ class PlayerPreferencesRepositoryImpl @Inject constructor(
     override suspend fun setAutoNextEnabled(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[PreferencesKeys.AUTO_NEXT_ENABLED] = enabled
+        }
+    }
+
+    override suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[PreferencesKeys.PRESS_HOLD_SPEED_ENABLED] = enabled
         }
     }
 

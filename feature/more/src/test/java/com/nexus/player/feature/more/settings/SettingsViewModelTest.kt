@@ -134,6 +134,7 @@ class SettingsViewModelTest {
 
         viewModel.setSeekDurationSeconds(30)
         viewModel.setDoubleTapSeekEnabled(false)
+        viewModel.setPressAndHoldSpeedEnabled(false)
         viewModel.setDefaultDisplayMode(VideoDisplayMode.STRETCH)
         viewModel.setDefaultLayoutMode(LibraryLayout.LIST)
         viewModel.setDefaultSortOption(LibrarySort.SIZE_DESC)
@@ -142,6 +143,7 @@ class SettingsViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(30, state.settings.player.seekDurationSeconds)
         assertFalse(state.settings.player.isDoubleTapSeekEnabled)
+        assertFalse(state.settings.player.isPressAndHoldSpeedEnabled)
         assertEquals(VideoDisplayMode.STRETCH, state.settings.player.defaultDisplayMode)
         assertEquals(LibraryLayout.LIST, state.settings.library.defaultLayoutMode)
         assertEquals(LibrarySort.SIZE_DESC, state.settings.library.defaultSortOption)
@@ -370,6 +372,12 @@ class SettingsViewModelTest {
         override suspend fun setPressAndHoldSpeed(speed: Float) {
             _settings.value = _settings.value.copy(
                 player = _settings.value.player.copy(pressAndHoldSpeed = speed)
+            )
+        }
+
+        override suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+            _settings.value = _settings.value.copy(
+                player = _settings.value.player.copy(isPressAndHoldSpeedEnabled = enabled)
             )
         }
 

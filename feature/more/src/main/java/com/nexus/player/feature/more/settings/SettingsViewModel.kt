@@ -159,6 +159,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+        viewModelScope.launch(ioDispatcher) {
+            settingsRepository.setPressAndHoldSpeedEnabled(enabled)
+        }
+    }
+
     fun setDefaultDisplayMode(mode: VideoDisplayMode) {
         viewModelScope.launch(ioDispatcher) {
             settingsRepository.setDefaultDisplayMode(mode)

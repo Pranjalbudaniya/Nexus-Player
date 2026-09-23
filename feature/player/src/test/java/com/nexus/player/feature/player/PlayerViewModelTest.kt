@@ -867,6 +867,21 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun setPressAndHoldSpeedEnabled_updatesAndPersists() = testScope.runTest {
+        val video = createSampleVideo(id = "vid_press_hold")
+        fakeVideoRepository.addVideo(video)
+        val viewModel = createViewModel(SavedStateHandle(mapOf("videoId" to "vid_press_hold")))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.isPressAndHoldSpeedEnabled.value)
+
+        viewModel.setPressAndHoldSpeedEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(fakePreferencesRepository.isPressAndHoldSpeedFlow.value)
+    }
+
+    @Test
     fun completionBehavior_emitsVideoCompletedEvent_andAvoidsDuplicateRoomWrites() = testScope.runTest {
         val video = createSampleVideo(id = "vid_complete_events", durationMs = 100_000L)
         fakeVideoRepository.addVideo(video)
@@ -1785,6 +1800,7 @@ class PlayerViewModelTest {
         val subtitleAppearanceFlow = MutableStateFlow(SubtitleAppearance())
         val seekDurationFlow = MutableStateFlow(10)
         val isAutoNextFlow = MutableStateFlow(false)
+        val isPressAndHoldSpeedFlow = MutableStateFlow(true)
         val audioBoostFlow = MutableStateFlow(100)
         val isEqualizerEnabledFlow = MutableStateFlow(false)
         val equalizerPresetFlow = MutableStateFlow("Flat")
@@ -1807,6 +1823,7 @@ class PlayerViewModelTest {
         override val subtitleAppearance: Flow<SubtitleAppearance> = subtitleAppearanceFlow
         override val seekDurationSeconds: Flow<Int> = seekDurationFlow
         override val isAutoNextEnabled: Flow<Boolean> = isAutoNextFlow
+        override val isPressAndHoldSpeedEnabled: Flow<Boolean> = isPressAndHoldSpeedFlow
         override val audioBoostPercent: Flow<Int> = audioBoostFlow
         override val isEqualizerEnabled: Flow<Boolean> = isEqualizerEnabledFlow
         override val equalizerPreset: Flow<String> = equalizerPresetFlow
@@ -1861,6 +1878,10 @@ class PlayerViewModelTest {
 
         override suspend fun setAutoNextEnabled(enabled: Boolean) {
             isAutoNextFlow.value = enabled
+        }
+
+        override suspend fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+            isPressAndHoldSpeedFlow.value = enabled
         }
 
         override suspend fun setAudioBoost(percent: Int) {

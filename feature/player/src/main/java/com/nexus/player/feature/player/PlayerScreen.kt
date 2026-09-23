@@ -35,6 +35,7 @@ import com.nexus.player.core.playback.model.DecoderMode
 import com.nexus.player.feature.player.component.AudioSubtitlesSheet
 import com.nexus.player.feature.player.component.GestureHudState
 import com.nexus.player.feature.player.component.PlayerControls
+import com.nexus.player.feature.player.component.SubtitleCustomizationDrawer
 import com.nexus.player.feature.player.component.PlayerErrorOverlay
 import com.nexus.player.feature.player.component.PlayerGestureHud
 import com.nexus.player.feature.player.component.PlayerGestureSurface
@@ -98,8 +99,10 @@ fun PlayerRoute(
 
     val seekDurationSeconds by viewModel.seekDurationSeconds.collectAsStateWithLifecycle()
     val isAutoNextEnabled by viewModel.isAutoNextEnabled.collectAsStateWithLifecycle()
+    val isPressAndHoldSpeedEnabled by viewModel.isPressAndHoldSpeedEnabled.collectAsStateWithLifecycle(initialValue = true)
 
     var showAudioSubtitlesSheet by remember { mutableStateOf(false) }
+    var showSubtitleCustomizationDrawer by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showEqualizerDialog by remember { mutableStateOf(false) }
     var hudState by remember { mutableStateOf<GestureHudState>(GestureHudState.None) }
@@ -198,7 +201,9 @@ fun PlayerRoute(
     }
 
     val handleBackClick: () -> Unit = {
-        if (showSleepTimerDialog) {
+        if (showSubtitleCustomizationDrawer) {
+            showSubtitleCustomizationDrawer = false
+        } else if (showSleepTimerDialog) {
             showSleepTimerDialog = false
         } else if (showEqualizerDialog) {
             showEqualizerDialog = false
@@ -262,13 +267,39 @@ fun PlayerRoute(
     }
 
     val onVolumeDelta: (Float) -> Unit = { delta ->
-        val newVol = (currentVolume + (delta * maxVolume)).coerceIn(0f, maxVolume.toFloat())
-        currentVolume = newVol
-        val volInt = newVol.roundToInt()
-        audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, volInt, 0)
-        val percent = if (maxVolume > 0) ((newVol / maxVolume) * 100).toInt() else 0
-        viewModel.setVolumePercent(percent)
-        hudState = GestureHudState.Volume(percent)
+        if (delta > 0) {
+            if (currentVolume < maxVolume.toFloat()) {
+                val newVol = (currentVolume + (delta * maxVolume)).coerceAtMost(maxVolume.toFloat())
+                currentVolume = newVol
+                val volInt = newVol.roundToInt()
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, volInt, 0)
+                val percent = if (maxVolume > 0) ((newVol / maxVolume) * 100).toInt() else 0
+                viewModel.setVolumePercent(percent)
+                hudState = GestureHudState.Volume(percent)
+            } else {
+                val currentBoost = (uiState as? PlayerUiState.Ready)?.audioBoostPercent ?: 100
+                val newBoost = (currentBoost + (delta * 100).roundToInt()).coerceIn(100, 200)
+                viewModel.setAudioBoost(newBoost)
+                viewModel.setVolumePercent(newBoost)
+                hudState = GestureHudState.Volume(newBoost)
+            }
+        } else if (delta < 0) {
+            val currentBoost = (uiState as? PlayerUiState.Ready)?.audioBoostPercent ?: 100
+            if (currentBoost > 100) {
+                val newBoost = (currentBoost + (delta * 100).roundToInt()).coerceIn(100, 200)
+                viewModel.setAudioBoost(newBoost)
+                viewModel.setVolumePercent(newBoost)
+                hudState = GestureHudState.Volume(newBoost)
+            } else {
+                val newVol = (currentVolume + (delta * maxVolume)).coerceIn(0f, maxVolume.toFloat())
+                currentVolume = newVol
+                val volInt = newVol.roundToInt()
+                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, volInt, 0)
+                val percent = if (maxVolume > 0) ((newVol / maxVolume) * 100).toInt() else 0
+                viewModel.setVolumePercent(percent)
+                hudState = GestureHudState.Volume(percent)
+            }
+        }
     }
 
     val onSeekBackward: () -> Unit = {
@@ -282,8 +313,10 @@ fun PlayerRoute(
     }
 
     val onSpeedBoost: (Boolean) -> Unit = { boosting ->
-        val boostSpeed = viewModel.setTemporarySpeedBoost(boosting)
-        hudState = if (boosting) GestureHudState.SpeedBoost(boostSpeed) else GestureHudState.None
+        if (isPressAndHoldSpeedEnabled || !boosting) {
+            val boostSpeed = viewModel.setTemporarySpeedBoost(boosting)
+            hudState = if (boosting) GestureHudState.SpeedBoost(boostSpeed) else GestureHudState.None
+        }
     }
 
     val onAudioBoostSelected: (Int) -> Unit = { boostPercent ->
@@ -332,8 +365,10 @@ fun PlayerRoute(
         panelState = panelState,
         hudState = hudState,
         showAudioSubtitlesSheet = showAudioSubtitlesSheet,
+        showSubtitleCustomizationDrawer = showSubtitleCustomizationDrawer,
         showSleepTimerDialog = showSleepTimerDialog,
         showEqualizerDialog = showEqualizerDialog,
+        isPressAndHoldSpeedEnabled = isPressAndHoldSpeedEnabled,
         onToggleControls = { viewModel.toggleControls() },
         onBackClick = handleBackClick,
         onPlayPauseClick = { viewModel.togglePlayPause() },
@@ -349,6 +384,11 @@ fun PlayerRoute(
         onSpeedBoost = onSpeedBoost,
         onOpenAudioSubtitles = { showAudioSubtitlesSheet = true },
         onDismissAudioSubtitles = { showAudioSubtitlesSheet = false },
+        onOpenSubtitleCustomization = {
+            showAudioSubtitlesSheet = false
+            showSubtitleCustomizationDrawer = true
+        },
+        onDismissSubtitleCustomization = { showSubtitleCustomizationDrawer = false },
         onSpeedSelected = { speed -> viewModel.setPlaybackSpeed(speed) },
         onSeekDurationSelected = { sec -> viewModel.setSeekDurationSeconds(sec) },
         onAutoNextToggled = { enabled -> viewModel.setAutoNextEnabled(enabled) },
@@ -401,8 +441,10 @@ fun PlayerScreen(
     panelState: PlayerPanelState = rememberPlayerPanelState(),
     hudState: GestureHudState = GestureHudState.None,
     showAudioSubtitlesSheet: Boolean = false,
+    showSubtitleCustomizationDrawer: Boolean = false,
     showSleepTimerDialog: Boolean = false,
     showEqualizerDialog: Boolean = false,
+    isPressAndHoldSpeedEnabled: Boolean = true,
     onToggleControls: () -> Unit = {},
     onBackClick: () -> Unit = {},
     onPlayPauseClick: () -> Unit = {},
@@ -418,6 +460,8 @@ fun PlayerScreen(
     onSpeedBoost: (Boolean) -> Unit = {},
     onOpenAudioSubtitles: () -> Unit = {},
     onDismissAudioSubtitles: () -> Unit = {},
+    onOpenSubtitleCustomization: () -> Unit = {},
+    onDismissSubtitleCustomization: () -> Unit = {},
     onSpeedSelected: (Float) -> Unit = {},
     onSeekDurationSelected: (Int) -> Unit = {},
     onAutoNextToggled: (Boolean) -> Unit = {},
@@ -498,6 +542,7 @@ fun PlayerScreen(
                     onPanChange = onPanChange,
                     onResetZoom = onResetZoom,
                     isZoomed = zoom > 1.01f,
+                    isPressAndHoldSpeedEnabled = isPressAndHoldSpeedEnabled,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -569,7 +614,16 @@ fun PlayerScreen(
             onSubtitleDelayChange = onSubtitleDelayChange,
             onSubtitleAppearanceChange = onSubtitleAppearanceChange,
             onAddExternalSubtitleClick = onAddExternalSubtitleClick,
+            onOpenSubtitleCustomization = onOpenSubtitleCustomization,
             onDismissRequest = onDismissAudioSubtitles
+        )
+    }
+
+    if (showSubtitleCustomizationDrawer) {
+        SubtitleCustomizationDrawer(
+            subtitleAppearance = subtitleAppearance,
+            onSubtitleAppearanceChange = onSubtitleAppearanceChange,
+            onDismissRequest = onDismissSubtitleCustomization
         )
     }
 

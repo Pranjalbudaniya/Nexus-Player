@@ -68,9 +68,13 @@ fun AccentColorPicker(
                 )
                 VerticalSpacer(NexusTheme.spacing.extraSmall)
                 Text(
-                    text = "Selected: ${selectedAccent.label}",
+                    text = if (enabled) {
+                        "Selected: ${selectedAccent.label}"
+                    } else {
+                        "Disabled while Dynamic Colors (Wallpaper) is active"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                    color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }
         }
@@ -135,7 +139,7 @@ private fun AccentSwatchItem(
                     .size(NexusTheme.dimensions.iconExtraLarge - NexusTheme.spacing.small)
                     .border(
                         width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                         shape = CircleShape
                     )
             )
@@ -147,7 +151,9 @@ private fun AccentSwatchItem(
                 .size(NexusTheme.dimensions.iconLarge)
                 .clip(CircleShape)
                 .background(
-                    if (accent == AccentColor.DEFAULT) {
+                    if (!enabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    } else if (accent == AccentColor.DEFAULT) {
                         MaterialTheme.colorScheme.surfaceContainerHighest
                     } else {
                         swatchColor
@@ -159,14 +165,18 @@ private fun AccentSwatchItem(
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (isSelected) {
+                        if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f)
+                    },
                     modifier = Modifier.size(NexusTheme.dimensions.iconSmall)
                 )
             } else if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = "Selected",
-                    tint = Color.White,
+                    tint = if (enabled) Color.White else Color.White.copy(alpha = 0.4f),
                     modifier = Modifier.size(NexusTheme.dimensions.iconSmall)
                 )
             }

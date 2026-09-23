@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Remove
@@ -83,8 +84,9 @@ fun AudioSubtitlesSheet(
     onToggleSubtitles: (Boolean) -> Unit,
     onAudioDelayChange: (Long) -> Unit,
     onSubtitleDelayChange: (Long) -> Unit,
-    onSubtitleAppearanceChange: (SubtitleAppearance) -> Unit,
+    onSubtitleAppearanceChange: (SubtitleAppearance) -> Unit = {},
     onAddExternalSubtitleClick: () -> Unit,
+    onOpenSubtitleCustomization: () -> Unit = {},
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -238,11 +240,16 @@ fun AudioSubtitlesSheet(
                     )
                 }
 
-                Switch(
-                    checked = areSubtitlesEnabled,
-                    onCheckedChange = onToggleSubtitles,
-                    modifier = Modifier.testTag("audio_subtitles_toggle")
-                )
+                IconButton(
+                    onClick = onOpenSubtitleCustomization,
+                    modifier = Modifier.testTag("audio_subtitles_edit_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = "Customize Subtitles",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
@@ -504,142 +511,6 @@ fun AudioSubtitlesSheet(
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "+50ms", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.medium))
-
-            // =========================================================================
-            // 4. Subtitle Appearance Section
-            // =========================================================================
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.FormatSize,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Subtitle Appearance",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
-
-            // Text Size
-            Text(
-                text = "Size",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
-            ) {
-                SubtitleTextSize.entries.forEach { size ->
-                    FilterChip(
-                        selected = subtitleAppearance.textSize == size,
-                        onClick = { onSubtitleAppearanceChange(subtitleAppearance.copy(textSize = size)) },
-                        label = { Text(size.label, style = MaterialTheme.typography.labelSmall) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
-
-            // Text Color
-            Text(
-                text = "Text Color",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
-            ) {
-                SubtitleTextColor.entries.forEach { color ->
-                    FilterChip(
-                        selected = subtitleAppearance.textColor == color,
-                        onClick = { onSubtitleAppearanceChange(subtitleAppearance.copy(textColor = color)) },
-                        label = { Text(color.label, style = MaterialTheme.typography.labelSmall) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
-
-            // Background / Outline Style
-            Text(
-                text = "Background & Outline",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NexusTheme.spacing.small)
-            ) {
-                SubtitleBackgroundStyle.entries.forEach { style ->
-                    FilterChip(
-                        selected = subtitleAppearance.backgroundStyle == style,
-                        onClick = { onSubtitleAppearanceChange(subtitleAppearance.copy(backgroundStyle = style)) },
-                        label = { Text(style.label, style = MaterialTheme.typography.labelSmall) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            if (subtitleAppearance.backgroundStyle == SubtitleBackgroundStyle.Box) {
-                Spacer(modifier = Modifier.height(NexusTheme.spacing.small))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Background Opacity",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${(subtitleAppearance.backgroundOpacity * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Slider(
-                    value = subtitleAppearance.backgroundOpacity,
-                    onValueChange = { onSubtitleAppearanceChange(subtitleAppearance.copy(backgroundOpacity = it)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("subtitles_sheet_opacity_slider")
-                )
             }
         }
     }

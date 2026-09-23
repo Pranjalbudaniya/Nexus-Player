@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
+import com.nexus.player.core.navigation.PlayerRoute
 import com.nexus.player.core.common.network.ApplicationScope
 import com.nexus.player.core.common.network.Dispatcher
 import com.nexus.player.core.common.network.NexusDispatchers
@@ -121,13 +123,13 @@ class PlayerViewModel internal constructor(
         const val COMPLETION_THRESHOLD = 0.95f
 
         fun sanitizeMediaId(rawId: String): String {
-            return if (rawId.startsWith("http%3A", ignoreCase = true) || rawId.startsWith("https%3A", ignoreCase = true)) {
-                try {
+            return try {
+                if (rawId.contains("%")) {
                     java.net.URLDecoder.decode(rawId, "UTF-8")
-                } catch (_: Exception) {
+                } else {
                     rawId
                 }
-            } else {
+            } catch (_: Exception) {
                 rawId
             }
         }
@@ -150,7 +152,9 @@ class PlayerViewModel internal constructor(
         }
     }
 
-    private val videoIdFromNav: String? = savedStateHandle["videoId"]
+    private val videoIdFromNav: String? = runCatching {
+        savedStateHandle.toRoute<PlayerRoute>().videoId
+    }.getOrNull() ?: savedStateHandle.get<String>("videoId")
 
     private val _video = MutableStateFlow<Video?>(null)
     val video: StateFlow<Video?> = _video.asStateFlow()
@@ -190,6 +194,13 @@ class PlayerViewModel internal constructor(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = false
+        )
+
+    val isPressAndHoldSpeedEnabled: StateFlow<Boolean> = playerPreferencesRepository.isPressAndHoldSpeedEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = true
         )
 
     val audioBoostPercent: StateFlow<Int> = playerPreferencesRepository.audioBoostPercent
@@ -405,11 +416,7 @@ class PlayerViewModel internal constructor(
     init {
         videoIdFromNav?.let { rawId ->
             val id = sanitizeMediaId(rawId)
-            if (playbackQueueManager.queueState.value.isEmpty ||
-                playbackQueueManager.queueState.value.currentVideoId != id
-            ) {
-                loadMedia(id)
-            }
+            loadMedia(id)
         }
         observePlaybackPositionForPersistence()
         observeTrackPreferences()
@@ -583,7 +590,8 @@ class PlayerViewModel internal constructor(
         val isHttpNetwork = sanitizedId.startsWith("http://", ignoreCase = true) ||
             sanitizedId.startsWith("https://", ignoreCase = true)
         val isLocalUri = sanitizedId.startsWith("content://", ignoreCase = true) ||
-            sanitizedId.startsWith("file://", ignoreCase = true)
+            sanitizedId.startsWith("file://", ignoreCase = true) ||
+            sanitizedId.startsWith("/")
 
         if (sanitizedId.contains("://") && !isHttpNetwork && !isLocalUri) {
             val safeUrl = sanitizedId.substringBefore('?').substringBefore('#')
@@ -635,7 +643,7 @@ class PlayerViewModel internal constructor(
             }
 
             val video = withContext(ioDispatcher) {
-                videoRepository.getVideoById(sanitizedId)
+                videoRepository.getVideoById(sanitizedId) ?: videoRepository.getVideoByUri(sanitizedId)
             }
 
             if (video != null) {
@@ -799,6 +807,12 @@ class PlayerViewModel internal constructor(
         playbackQueueManager.setAutoNextEnabled(enabled)
         viewModelScope.launch {
             playerPreferencesRepository.setAutoNextEnabled(enabled)
+        }
+    }
+
+    fun setPressAndHoldSpeedEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            playerPreferencesRepository.setPressAndHoldSpeedEnabled(enabled)
         }
     }
 
