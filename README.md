@@ -4,7 +4,7 @@
 
 # Nexus Player
 
-**A modern, privacy-first, offline Android video player crafted with Jetpack Compose & AndroidX Media3.**
+**A modern, privacy-first, offline Android video player crafted with Jetpack Compose & AndroidX Media3..**
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/Pranjalbudaniya/Nexus-Player/releases)
 [![Android](https://img.shields.io/badge/Android-9.0%2B%20(API%2028%2B)-3DDC84.svg?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
